@@ -1,0 +1,417 @@
+llm-wiki Repository — Full Exploration Findings
+Generated: 2026-04-05
+Analyst: OpenCode
+
+===========================================================================
+1. REPOSITORY OVERVIEW
+===========================================================================
+
+Repo path:    /Users/johanesalxd/Developer/git/llm-wiki
+Live skill:   ~/clawd/skills/llm-wiki/SKILL.md  (verified IDENTICAL to repo)
+Memory root:  ~/clawd/memory/
+
+Purpose: An OpenClaw skill implementing Karpathy's LLM Knowledge Base
+pattern. Three operations — Ingest, Compile, Lint — manage a tiered memory
+architecture (L0→L3) for the Vader/OpenClaw workspace.
+
+===========================================================================
+2. FILE INVENTORY & STATUS
+===========================================================================
+
+File                              Lines   Status
+---                               -----   ------
+README.md                           70    Complete, accurate
+SKILL.md                           166    Complete, well-structured
+scripts/ingest.py                  318    Functional (verified)
+scripts/lint.py                    392    Functional (verified)
+scripts/compile_helper.py          235    Functional (verified)
+references/source-routing.md       174    Thorough, covers all edge cases
+references/compile-conventions.md  206    Complete with before/after examples
+.opencode/plans/plan-001-llm-wiki-init.md  144  Implementation plan (COMPLETED)
+.opencode/artifacts/              (empty at scan time)
+.opencode/package.json             dependency: @opencode-ai/plugin 1.3.12
+
+No pyproject.toml present (scripts are stdlib-only by design — correct).
+.ruff_cache/ exists in repo root (ruff was run at some point; no pyproject.toml
+to configure it — minor inconsistency, harmless).
+
+===========================================================================
+3. ARCHITECTURE QUALITY
+===========================================================================
+
+3.1  Tiered memory model
+---------
+Well-designed four-tier hierarchy:
+  L0  ~/clawd/memory/raw/          Immutable source stubs (LLM reads only)
+  L1  ~/clawd/short-term-memory.md Active working state (STM)
+  L2  ~/clawd/memory/*.md          LLM-maintained wiki (project files, dated notes)
+  L3  ~/clawd/MEMORY.md            Curated durables, auto-injected into context
+
+Clear separation of concerns. L0 immutability principle is enforced by
+convention (SKILL.md, compile-conventions.md both state "LLM reads only").
+No code enforces this — it is policy, not mechanism. Acceptable given the
+agent-driven model.
+
+3.2  Skill entrypoint (SKILL.md)
+---------
+YAML frontmatter is correctly formatted with a concise, accurate description
+field. The "NOT for" clause is valuable — explicitly scopes the skill away
+from STM/L1, spa day, and distill-and-flush, preventing misuse.
+
+Skill is installed at ~/clawd/skills/llm-wiki/SKILL.md and verified to be
+byte-for-byte identical to the repo copy. Integration point is live and
+correct.
+
+3.3  Script design philosophy
+---------
+All three scripts:
+  - Use stdlib only (no external deps). Verified: no imports outside stdlib.
+  - Accept --raw-dir / --memory-dir overrides for testability.
+  - Are non-destructive (ingest writes new files; compile_helper is read-only;
+    lint is read-only).
+  - Return non-zero exit codes on issues (lint returns 1 if any issues found).
+
+This is sound design for agent-callable helper tools.
+
+3.4  Plan-001 completion status
+---------
+plan-001-llm-wiki-init.md lists all 7 deliverables + 6 post-build steps.
+All deliverables are present and verified functional. Post-build steps
+executed (log.md created, SKILL.md copied, CLIs verified). Plan is
+effectively DONE, though not explicitly marked so.
+
+===========================================================================
+4. SCRIPT FUNCTIONALITY — DETAILED ASSESSMENT
+===========================================================================
+
+4.1  ingest.py
+---------
+STRENGTHS:
+  - Source type detection is correct for all expected types (web, pdf, image,
+    youtube, twitter). Verified with dry-run tests.
+  - Priority order in detect_source_type() matches the documented priority
+    table in source-routing.md: YouTube > Twitter > PDF > Image > Web.
+  - slugify() correctly strips non-alphanumeric chars, lowercases, and caps
+    at max_words=6.
+  - derive_slug() correctly strips extensions (.html, .php, .pdf, .md) and
+    query strings before slugifying.
+  - --dry-run flag works correctly — prints all decisions without writing.
+  - log.md auto-creation with correct header works.
+  - build_frontmatter() produces correctly formatted YAML frontmatter
+    matching the spec in SKILL.md exactly.
+
+GAPS / BUGS:
+  1. NLM source type is NOT auto-detectable. detect_source_type() has no
+     branch for "nlm" — a plain-text notebook name (e.g., "project-alpha
+     notebook") falls through to type "web" (the fallback). The NLM entry
+     exists in ROUTING_TABLE but is unreachable via automatic detection.
+     This is an inherent limitation: NLM inputs have no reliable syntactic
+     marker. Resolution: require `--type nlm` flag for NLM sources, or
+     document that NLM must use `--slug` + manual `source_type` correction.
+     Currently undocumented as a known limitation.
+
+  2. YouTube slug derivation is weak. For a URL like
+     `https://youtube.com/watch?v=abc123`, derive_slug() extracts "watch"
+     (the path segment before `?`). The query param `v=abc123` is stripped.
+     Result: slug = "watch", title = "Watch" — uninformative. Verified in
+     dry-run. Mitigation: use `--slug` when ingesting YouTube URLs.
+     Source-routing.md does not warn about this. A minor note would help.
+
+  3. Title generation is a placeholder. title = slug.replace("-", " ").title()
+     produces a guess from the slug, not the actual source title. This is by
+     design (the agent fills in the real title after fetching content), but
+     it means log.md entries written at ingest time have wrong titles.
+     The log entry format "## [date] ingest | Title | type | slug" will show
+     the derived title, not the real one. This is a workflow gap: the agent
+     should update the log entry after fetching, but the SKILL.md spec makes
+     log.md append-only. Contradiction: the log gets an inaccurate title
+     that can never be corrected.
+
+  4. No duplicate detection. If `ingest.py` is called twice with the same
+     slug on the same day, it silently overwrites the stub and appends a
+     second log entry. No idempotency guard.
+
+  5. Frontmatter tag formatting: tags are rendered as ["tag1", "tag2"] with
+     double-quoted items. This is valid YAML inline flow sequence format but
+     slightly non-standard for minimal frontmatter parsers. The lint.py
+     parse_list_field() handles it correctly. No functional issue.
+
+4.2  lint.py
+---------
+STRENGTHS:
+  - All four checks implemented and working.
+  - Correctly excludes log.md and lint-*.md from raw scans.
+  - Contradiction resolution detection (RESOLVED within 5 lines) matches the
+     documented convention in compile-conventions.md exactly.
+  - Orphan L2 scan correctly limits to project-*.md files (not dated notes).
+  - --stale-days is configurable (default 30, per spec).
+  - --output saves to file, creating parent dirs if needed.
+  - Exit code 1 on issues, 0 on clean — useful for CI/scripted workflows.
+
+GAPS / BUGS:
+  1. Orphan L2 false-positive rate is high. Live run against ~/clawd/memory/
+     shows 166 orphan L2 sections across 4 project files. ALL sections in
+     all project files lack `Source: memory/raw/...` backlinks — because the
+     llm-wiki skill is newly deployed and no compile operations have been
+     run yet. This is expected on first run, but means the orphan L2 scan
+     is essentially noise until the wiki matures. No way to suppress
+     "pre-existing" sections from the check.
+
+  2. Contradiction scan heuristic is fragile. It checks if any of the 5
+     lines after "⚠️ CONTRADICTION:" contain "RESOLVED". If a long
+     contradiction description spans more than 4 lines before the RESOLVED
+     note, it will be flagged as unresolved. The 5-line window is
+     underdocumented and may surprise authors of multi-line contradiction
+     blocks.
+
+  3. Section parser in check_orphan_l2() only triggers on lines starting
+     with "##" (H2 or deeper). H1 content before the first ## section has
+     no current_section, so it is skipped. This is correct behavior (H1 is
+     usually a file title), but H1-level knowledge blocks would be invisible
+     to the orphan L2 scanner.
+
+  4. parse_frontmatter() is a naive line-by-line parser. YAML multi-line
+     values (using `|` or `>`) or list values spanning multiple lines will
+     not parse correctly. In practice, the frontmatter schema is simple
+     enough that this is not currently a problem, but it would break if
+     compiled_into became a multi-line YAML list (which compile-conventions.md
+     shows as the expected format after multiple compiles):
+       compiled_into:
+         - memory/project-foo.md
+         - memory/project-bar.md
+     In this case, parse_frontmatter() would return compiled_into = "" or
+     just the first dash-line. compile_helper.py shares the same parser.
+     This is the most significant correctness bug in the codebase.
+
+  5. Stale scan only catches files with a compiled_date field. If a raw file
+     has compiled: true but no compiled_date (frontmatter omission or typo),
+     it silently skips. Should log a warning.
+
+4.3  compile_helper.py
+---------
+STRENGTHS:
+  - Read-only, safe to call at any time.
+  - find_raw_file() handles multiple slugs across dates by returning the most
+    recent match — correct behavior.
+  - suggest_l2_targets() tag-to-filename substring matching is a reasonable
+    heuristic (e.g., tag "career" matches "project-career.md").
+  - Falls back to all project files if no tags match — avoids empty
+    suggestions.
+  - Output is clean and actionable.
+
+GAPS / BUGS:
+  1. Shares the same naive frontmatter parser as lint.py — same multi-line
+     YAML list vulnerability for compiled_into.
+
+  2. suggest_l2_targets() is purely filename-based substring matching. It
+     does not read project file contents, so it cannot suggest relevance
+     based on existing sections or project topics. This is a design
+     tradeoff (keeps it stdlib-only and fast), but means tags must match
+     project filename substrings exactly or the fallback returns everything.
+
+  3. No --date flag to target a specific date when the same slug appears on
+     multiple days (rare but possible). Currently returns only the most
+     recent match.
+
+===========================================================================
+5. REFERENCE DOCUMENT QUALITY
+===========================================================================
+
+5.1  references/source-routing.md
+---------
+Excellent. Covers all 7 source types with concrete URL examples. Edge cases
+table for YouTube (playlists, channels, Shorts, live), Twitter (X Notes, 
+Spaces, private accounts), PDF (DOI redirect, CDN URLs), and NotebookLM
+share URLs is thorough and actionable.
+
+Priority order section matches ingest.py implementation exactly.
+
+One gap: does not mention the YouTube slug weakness (derive_slug extracts
+"watch" from watch?v= URLs). A note recommending `--slug` for YouTube URLs
+would reduce confusion.
+
+5.2  references/compile-conventions.md
+---------
+Excellent. Covers the full decision tree (update existing / create new /
+use dated note), exact backlink format, contradiction flag and resolution
+protocol, multi-topic source handling, and cross-references. The
+before/after compile example is concrete and matches all other documented
+conventions.
+
+The compile checklist at the end is a particularly strong artifact — a
+complete rundown an agent can follow step by step.
+
+One gap: the "After (raw frontmatter updated)" example shows compiled_into
+as a YAML multi-line list:
+  compiled_into:
+    - memory/project-llm-reasoning.md
+    - memory/project-prompt-engineering.md
+
+But the frontmatter parser in lint.py and compile_helper.py will only see
+"compiled_into: " (empty) when this format is used, because the parser reads
+one line at a time with `key: value` splitting. This creates a silent
+discrepancy between the documented format and what the scripts can parse.
+The ingest.py writes compiled_into: [] (inline), which the parser handles
+correctly. The spec should either mandate inline format for compiled_into
+or the parser needs to be upgraded.
+
+===========================================================================
+6. INTEGRATION WITH ~/clawd/memory/ AND ~/clawd/skills/
+===========================================================================
+
+6.1  ~/clawd/skills/llm-wiki/
+---------
+  - Directory exists: ~/clawd/skills/llm-wiki/
+  - Contains only SKILL.md — no scripts present.
+  - SKILL.md is byte-for-byte identical to repo SKILL.md. In sync.
+  - Scripts are NOT co-located with the skill. They live in the repo at
+    ~/Developer/git/llm-wiki/scripts/. Agents invoking the skill must know
+    the repo path to call scripts directly.
+  - The SKILL.md references scripts as `scripts/ingest.py` (relative paths)
+    without specifying a base directory. This will work only if the agent's
+    CWD is the repo root. In practice, agents call scripts with full paths
+    (per README quickstart: `python3 scripts/ingest.py ...` from repo root).
+    This is a minor documentation ambiguity — full paths would be clearer.
+
+6.2  ~/clawd/memory/raw/
+---------
+  - Directory exists and is writable.
+  - Contains only log.md (created with correct header, empty of entries).
+  - No raw sources have been ingested yet — the skill is deployed but unused.
+  - All four lint checks pass clean (0 issues on orphan/stale/contradiction
+    scans). The 166 orphan L2 issues are pre-existing project-*.md content
+    that predates llm-wiki — expected.
+
+6.3  ~/clawd/memory/ (L2)
+---------
+  - 4 active project files: project-career.md, project-finance.md,
+    project-personal.md, project-security.md.
+  - projects.md index exists and is well-structured with a Read First Map.
+  - None of the project files have Source: memory/raw/ backlinks — all
+    content predates llm-wiki.
+  - MEMORY.md (L3) exists and is presumably auto-injected into context.
+
+6.4  ~/clawd/short-term-memory.md (L1)
+---------
+  - Exists. Managed separately (not part of llm-wiki scope — correct).
+
+6.5  Other relevant skills in ~/clawd/skills/
+---------
+All downstream tools referenced in SKILL.md routing table are present:
+  - gemini-pdf-analyzer  ✓
+  - vision-sandbox       ✓  (listed as "vision-sandbox")
+  - bird                 ✓  (for `bird thread <url>`)
+  - notebooklm           ✓  (NLM skill — named "notebooklm" not "nlm")
+  - summarize            ✗  NOT FOUND in skills list
+
+  Skills found: beads, bird, deep-analysis, duckdb-cli-ai-skills,
+  gemini-imagen, gemini-pdf-analyzer, gemini-search, homeassistant, jq,
+  llm-wiki, mag7-quote, mcp-tools, notebooklm, opencode-acp, polymarket,
+  proc-janitor, serper, skill-cleanup, vision-sandbox, wake-on-lan.
+
+  MISSING: "summarize" skill (referenced in SKILL.md and source-routing.md
+  for YouTube ingestion). No skill named "summarize" exists in
+  ~/clawd/skills/. If a YouTube URL is ingested, the agent will be told to
+  "Invoke the summarize skill" but no such skill is installed. This is a
+  broken integration point.
+
+  NLM skill naming mismatch: SKILL.md says `nlm` skill; the installed skill
+  directory is named `notebooklm`. The agent needs to know the correct name.
+  Not a blocker (agent can look up the skill), but introduces friction.
+
+===========================================================================
+7. WORKFLOW GAP ANALYSIS: INGEST → COMPILE → LINT
+===========================================================================
+
+The three-step workflow is well-specified. Below are gaps relative to the
+planned workflow:
+
+Gap 1: COMPILE step has NO script automation.
+  ingest.py automates stub writing. lint.py automates health checking.
+  But compile has no automation at all — compile_helper.py only prints a
+  brief; the actual L2 file updates are 100% manual/agent. This is by design
+  ("Compile step is always manual/agent-triggered"), but it means there is
+  no way to verify compile correctness programmatically. A post-compile
+  validator (did you update the frontmatter? did you append to log?) does
+  not exist. The compile checklist in compile-conventions.md is the only
+  guard — it relies on agent discipline.
+
+Gap 2: No log.md integrity check in lint.py.
+  The lint scan does not verify that log.md is well-formed or that log
+  entries match actual files on disk. A log entry for a slug that has no
+  corresponding raw file (e.g., deleted) would go undetected.
+
+Gap 3: Frontmatter multi-line YAML incompatibility (detailed in §4).
+  The most likely compile operation writes compiled_into as a YAML block
+  list (matching compile-conventions.md examples). The parsers in both
+  lint.py and compile_helper.py will fail to read those values. This will
+  cause stale scan to potentially miss compiled files (if compiled_into
+  is multi-line, the parser returns empty compiled_into — but compiled
+  status is read from the boolean field, which does parse correctly, so
+  stale scan itself is not directly impacted). The compile_helper output
+  for "Compiled into:" would show nothing even if values exist.
+
+Gap 4: No MEMORY.md (L3) integration.
+  SKILL.md describes L3 as "curated durables, auto-injected into context"
+  but the compile workflow has no step for surfacing compiled knowledge into
+  MEMORY.md. The agent must decide independently when and what to promote
+  to L3. This is consistent with "human decides" philosophy but means
+  there is no lint check for "knowledge that should be in MEMORY.md but
+  isn't." Low priority.
+
+Gap 5: No projects.md update step in compile workflow.
+  compile-conventions.md says "Register the new file in memory/projects.md
+  index" when creating a new project file. But this step is not in the
+  SKILL.md compile procedure list and has no verification in lint.py.
+  A new project file created during compile could exist without appearing
+  in projects.md — the orphan L2 scan would catch its sections but not the
+  missing index entry.
+
+Gap 6: summarize skill missing (see §6.5).
+  YouTube ingestion workflow is broken at the tool call step. The routing
+  decision is correct but the referenced tool does not exist.
+
+===========================================================================
+8. SUMMARY ASSESSMENT
+===========================================================================
+
+Overall quality: HIGH
+The repo is well-designed, internally consistent, and the implementation
+closely tracks the plan in plan-001. Scripts are clean stdlib Python with
+correct error handling. Documentation is thorough with concrete examples.
+The tiered memory model is sound and the skill integration is live.
+
+Critical issues (must fix before relying on skill in production):
+  C1. summarize skill is missing — YouTube ingestion is broken.
+  C2. Frontmatter multi-line YAML list parsing bug — compiled_into in
+      multi-line YAML block format (as shown in compile-conventions.md
+      examples) will not be parsed by lint.py or compile_helper.py.
+      Either enforce inline format in the spec OR upgrade the parsers.
+
+Minor issues (fix when convenient):
+  M1. NLM source type cannot be auto-detected — requires manual --slug +
+      post-ingest frontmatter correction. Document this limitation.
+  M2. YouTube URLs produce weak slugs ("watch") — recommend --slug for
+      YouTube. Add note to source-routing.md.
+  M3. Log.md titles are derived-slug placeholders at ingest time, not real
+      titles. Since log is append-only, these are never corrected.
+      Consider updating the title after the agent fetches the real title
+      (requires relaxing "log is append-only" slightly, or accepting
+      inaccurate log titles).
+  M4. No duplicate detection in ingest.py — silent overwrite + duplicate
+      log entries if same slug + date is ingested twice.
+  M5. projects.md update step missing from SKILL.md compile procedure.
+  M6. Script paths in SKILL.md use relative paths without specifying base
+      directory. Should note that commands run from repo root.
+  M7. .ruff_cache/ exists in repo root without a pyproject.toml — suggests
+      ruff was run adhoc. No formal lint config for the scripts themselves.
+
+Non-issues (working as designed):
+  - 166 orphan L2 sections on fresh install — expected, pre-existing content.
+  - compile_helper.py tag matching is shallow — acceptable given stdlib
+    constraint.
+  - Compile step is fully manual — this is the intended design.
+
+===========================================================================
+END OF FINDINGS
+===========================================================================
