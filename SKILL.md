@@ -5,7 +5,14 @@ description: "LLM Knowledge Base skill — ingest raw sources into memory/raw/, 
 
 # llm-wiki skill
 
-Implements Karpathy's LLM Knowledge Base pattern for the Vader/OpenClaw workspace. Three operations: **Ingest**, **Compile**, **Lint**.
+Implements Karpathy's LLM Knowledge Base pattern for the Vader/OpenClaw workspace. Three core wiki operations: **Ingest**, **Compile**, **Lint**.
+
+In this adaptation, **Vader / OpenClaw** is the runtime layer:
+- **point of ingestion** — Jo drops a URL, file, blob, or external reference into chat
+- **orchestrator** — Vader chooses the right upstream acquisition tool/skill, writes the raw record, compiles it into memory, and runs lint
+- **query engine** — Vader answers against the compiled markdown memory substrate using direct reads, `memory_search`, project files, dated notes, and raw sources
+
+A future Obsidian layer is optional and human-facing only. It is not required for the current architecture.
 
 > **Skill taxonomy:** Skills referenced in this file fall into three categories:
 > 1. **Local skills** — in `~/clawd/skills/` (e.g. `llm-wiki` itself)
@@ -19,6 +26,15 @@ Implements Karpathy's LLM Knowledge Base pattern for the Vader/OpenClaw workspac
 ## Ingest
 
 Add a new source to the knowledge base.
+
+### Acquisition vs ingest
+
+Do not confuse **acquisition** with **ingest**.
+
+- **Acquisition** = use the right upstream tool/skill to extract the source content
+- **Ingest** = write the resulting source record into `~/clawd/memory/raw/`
+
+The tools in the routing table below are acquisition tools. The wiki protocol begins once the source is captured into the raw layer.
 
 ### Source type detection
 
@@ -105,6 +121,11 @@ For detailed conventions on L2 integration (when to create new files, how to han
 ## Lint
 
 Wiki health check. Reports problems — never auto-fixes.
+
+This is distinct from OpenClaw maintenance work such as Spa Day.
+
+- **llm-wiki lint** = research/wiki integrity
+- **Spa Day / context optimization** = OpenClaw instruction, memory-surface, and system hygiene
 
 ### Lint checks
 
