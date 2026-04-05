@@ -42,6 +42,16 @@ For this repo, **Vader / OpenClaw** plays three roles:
 
 A future **human-consumption frontend** like Obsidian may be added later, but it is **not** required for the current architecture.
 
+### Model policy
+
+Standard llm-wiki work is limited to:
+- `gpt54min`
+- `sonnet`
+
+Use one of those two by default for ingestion, orchestration, query, compile, and lint review work around the wiki. This is a safety/quality guardrail to keep the memory substrate from drifting under weaker models.
+
+Do not downgrade llm-wiki work to cheaper/weaker models unless Jo explicitly asks.
+
 ---
 
 ## Operating model

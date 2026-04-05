@@ -14,6 +14,16 @@ In this adaptation, **Vader / OpenClaw** is the runtime layer:
 
 A future Obsidian layer is optional and human-facing only. It is not required for the current architecture.
 
+## Model policy
+
+Standard llm-wiki work is limited to:
+- `gpt54min`
+- `sonnet`
+
+Use one of these two by default for ingestion, orchestration, query, compile, and lint review around the wiki. This is a quality guardrail for the persistent memory substrate.
+
+Do not downgrade llm-wiki work to cheaper/weaker models unless Jo explicitly asks.
+
 > **Skill taxonomy:** Skills referenced in this file fall into three categories:
 > 1. **Local skills** — in `~/clawd/skills/` (e.g. `llm-wiki` itself)
 > 2. **Bundled OpenClaw skills** — shipped with OpenClaw at `~/.local/share/mise/installs/node/24.13.0/lib/node_modules/openclaw/skills/` (e.g. `summarize`, `blogwatcher`)
