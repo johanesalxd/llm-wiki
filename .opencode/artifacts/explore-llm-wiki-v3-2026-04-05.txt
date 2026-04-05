@@ -1,0 +1,392 @@
+EXPLORE REPORT: llm-wiki Architecture & Consistency Review
+Date: 2026-04-05
+Reviewer: OpenCode explore agent
+
+---
+
+## EXECUTIVE SUMMARY
+
+The llm-wiki repo is structurally sound after three build iterations (v1 init, v2 fixes, v3 architecture alignment). The runtime model — Vader/OpenClaw as ingestion point, orchestrator, and query engine — is accurately and clearly articulated in both README.md and SKILL.md as of the v3 rewrite. The most significant remaining issues are stale references in references/source-routing.md and references/compile-conventions.md that still cite the deleted ingest.py and compile_helper.py scripts. These are Medium-severity documentation debt that will cause agent confusion during real first-use. The repo honestly acknowledges its own gaps (no index.md, no query-output filing loop, no Obsidian integration, first real end-to-end validation still pending) and is in a good state for that milestone, once the stale script references are cleaned up.
+
+---
+
+## 1. REPO STRUCTURE
+
+### What actually exists on disk
+
+```
+/Users/johanesalxd/Developer/git/llm-wiki/
+  README.md                        (212 lines — v3 rewrite, accurate)
+  SKILL.md                         (230 lines — v3 rewrite, accurate)
+  pyproject.toml                   (6 lines — ruff config only, no [project] table)
+  scripts/
+    lint.py                        (557 lines — fully functional, 6 checks)
+  references/
+    source-routing.md              (188 lines — STALE: still references ingest.py)
+    compile-conventions.md         (206 lines — STALE: still references compile_helper.py)
+  .opencode/
+    .gitignore                     (ignores node_modules, package.json, bun.lock)
+    package.json                   (@opencode-ai/plugin 1.3.15)
+    bun.lock
+    node_modules/                  (cross-spawn, isexe, path-key, shebang-command, which)
+    artifacts/
+      explore-llm-wiki-20260405.txt        (v1 explore findings — 417 lines)
+      explore-llm-wiki-readme-20260405.txt (README assessment — 634 lines)
+      [this report]
+    plans/
+      plan-001-llm-wiki-init.md    (original build plan — COMPLETED)
+      plan-002-llm-wiki-v2.md      (v2 fixes plan — COMPLETED)
+      plan-003-v3-architecture-alignment.md (v3 plan — COMPLETED)
+      simplify-scripts.md          (script deletion rationale — COMPLETED)
+```
+
+### What does NOT exist (intentionally)
+
+- scripts/ingest.py — deleted (v3 simplify, correct)
+- scripts/compile_helper.py — deleted (v3 simplify, correct)
+- index.md — not yet implemented (acknowledged in README)
+- Obsidian integration — deferred (acknowledged in README)
+- query-output filing — not yet implemented (acknowledged in README)
+- ~/clawd/skills/llm-wiki/SKILL.md — not verified in this scan (external to repo)
+
+### Git state
+
+Two branches: main and docs/llm-wiki-v3-architecture (current HEAD).
+Three commits:
+  163f80c  docs: add llm-wiki model policy
+  553ee13  docs: align llm-wiki repo with runtime architecture
+  b78900e  chore: drop ingest.py and compile_helper.py, use native tools
+
+The model policy commit (163f80c) is on the feature branch, not yet merged to main. This is the newest addition. All three commits have not been pushed to a remote.
+
+---
+
+## 2. DOCUMENTATION CONSISTENCY
+
+### 2.1 README vs Actual Contents
+
+README.md (v3 rewrite) is highly consistent with the actual repo contents. Specific findings:
+
+CONSISTENT:
+- Repo structure listing in "What this repo currently includes" matches actual disk contents exactly: README.md, SKILL.md, pyproject.toml, scripts/lint.py, references/source-routing.md, references/compile-conventions.md, .opencode/plans/. [README lines 114–126]
+- "Included" and "Not included" sections accurately describe what exists and what is deliberately absent. [README lines 128–142]
+- Architecture/layer mapping (L0–L3) matches the conventions in SKILL.md and lint.py's default path constants. [README lines 19–24 vs lint.py lines 34–36]
+- "Why only lint.py remains" section correctly summarizes the simplify-scripts rationale documented in .opencode/plans/simplify-scripts.md. [README lines 146–156]
+- Current status section accurately reflects that the first real end-to-end validation is pending. [README lines 158–172]
+- Quick reference paths are correct and match lint.py defaults.
+- Model policy section is present in README (lines 45–53) and matches SKILL.md (lines 17–25).
+
+MINOR INCONSISTENCY:
+- README references a `~/Developer/git/llm-wiki` path as "Repo root" (Quick reference, line 198). The actual path is `/Users/johanesalxd/Developer/git/llm-wiki`. The tilde expansion is correct on the local system but is slightly less precise than using an absolute path. Low severity — acceptable for readability.
+
+### 2.2 SKILL.md vs Actual Contents
+
+SKILL.md (v3 rewrite) is highly consistent with actual repo contents. Specific findings:
+
+CONSISTENT:
+- Skill frontmatter description (lines 3–4) is accurate and scoped correctly.
+- Vader/OpenClaw three-role description matches the README model exactly. [SKILL.md lines 10–14 vs README lines 28–42]
+- Model policy in SKILL.md (lines 17–25) matches README model policy (lines 45–53). Both list `gpt54min` and `sonnet`.
+- Ingest procedure (lines 60–91) correctly uses native write/edit tools, not ingest.py. No script references remain in the ingest section.
+- Compile procedure (lines 98–128) correctly uses native read/edit tools, not compile_helper.py.
+- Lint section (lines 131–178) correctly references scripts/lint.py with absolute path.
+- Auto-ingest section (lines 182–187) correctly describes native write/edit tool usage, not ingest.py.
+- Lint schedule cron command uses absolute path. [SKILL.md line 177]
+- Skill taxonomy note is present in both SKILL.md (lines 27–32) and source-routing.md (lines 5–10) — consistent.
+
+STALE WORDING IN AUTO-INGEST SECTION:
+- SKILL.md line 184 states: "Follow the Ingest procedure above using native `write`/`edit` tools directly — no script needed."
+  This wording is slightly awkward — it implies a script option existed or might be expected. The phrase "no script needed" is defensive language left over from before the v3 rewrite. The auto-ingest section was updated from plan-002 (which said "call python3 scripts/ingest.py") to native tools, but the "no script needed" hedge remains.
+  File: SKILL.md, line 184
+  Severity: Low.
+
+### 2.3 References vs Actual Contents
+
+Both reference files contain STALE content referencing deleted scripts. These are the most significant documentation consistency issues in the repo.
+
+STALE REFERENCES IN source-routing.md:
+
+1. Lines 108–111 contain a "Slug gotcha" blockquote that reads:
+   > Standard `watch?v=` YouTube URLs produce the weak auto-slug `watch` when passed to `ingest.py`. Always use `--slug <meaningful-name>` for YouTube URLs:
+   > ```sh
+   > python3 scripts/ingest.py "https://youtube.com/watch?v=abc123" --slug karpathy-llm-os-talk
+   > ```
+   ingest.py no longer exists. The slug gotcha conceptually applies to the SKILL.md ingest procedure (step 3: "Always ask Jo for a meaningful slug"), but the example command references a deleted script. An agent reading this file will encounter a broken example.
+   File: references/source-routing.md, lines 108–111
+   Severity: Medium.
+
+2. Lines 156–157 contain an "Auto-detection gotcha" blockquote:
+   > `ingest.py` **cannot** auto-detect NotebookLM notebooks from a URL or name. Always pass `--type nlm` explicitly when calling the script with an NLM source.
+   ingest.py no longer exists, and there is no `--type` flag to pass anywhere. The correct v3 guidance is: NLM sources cannot be auto-detected; always ask Jo for the notebook name (per SKILL.md lines 89–90). The reference to `--type nlm` is doubly stale: the flag was documented but never implemented even in v1/v2.
+   File: references/source-routing.md, lines 156–157
+   Severity: Medium.
+
+STALE REFERENCES IN compile-conventions.md:
+
+3. Lines 143–146 in the "During compile" subsection read:
+   ```
+   1. Run `python3 scripts/compile_helper.py smith-chain-of-thought`
+   2. Tags suggest `memory/project-llm-reasoning.md` and `memory/project-prompt-engineering.md`
+   3. Read both project files to understand existing content
+   4. Add summary sections to each
+   ```
+   compile_helper.py no longer exists. The v3 replacement for step 1 is: read the raw file directly using the `read` tool, then check projects.md and project-*.md files. The example is the most concrete walkthrough in the reference docs and will actively mislead any agent following it.
+   File: references/compile-conventions.md, lines 143–146
+   Severity: Medium.
+
+4. The final "Format note" at line 184:
+   > Always use inline list format for `compiled_into`. Multi-line YAML block lists (with `- item` on separate lines) are not supported by the lint and compile_helper parsers.
+   compile_helper.py is deleted. The note about lint.py parser still applies, but "compile_helper parsers" should be removed.
+   File: references/compile-conventions.md, line 184
+   Severity: Low.
+
+---
+
+## 3. VADER/OPENCLAW RUNTIME MODEL ACCURACY
+
+### What is correct
+
+The v3 rewrite successfully established Vader/OpenClaw's three-role model in both README and SKILL.md:
+
+1. **Point of ingestion** — accurately described in README lines 30–33 and SKILL.md lines 11–12. The description that "Jo drops a URL, uploads a file, asks for a Drive fetch, shares a tweet" is concrete and correct.
+
+2. **Orchestrator** — accurately described in README lines 34–38 and SKILL.md line 13. Correctly specifies that Vader: chooses the acquisition tool/skill, writes the raw source record into memory/raw/, compiles relevant insights into L1/L2 memory files, and runs lint when needed.
+
+3. **Query engine** — accurately described in README lines 39–42 and SKILL.md line 14. Correctly specifies that Vader answers against "compiled markdown memory substrate using direct reads, `memory_search`, raw files, project files, and dated notes." This is precise and accurate to how OpenClaw operates.
+
+4. **Acquisition vs. ingest distinction** — correctly drawn in SKILL.md (lines 40–47) and echoed in README operating model section (lines 59–72). The list of upstream acquisition tools (web_fetch, bird thread, gemini-pdf-analyzer, vision-sandbox, summarize, notebooklm) is correctly labeled as acquisition tools, not wiki components.
+
+5. **Future Obsidian layer** — correctly deferred and labeled "optional and human-facing only" in README line 43 and SKILL.md line 15.
+
+6. **Model policy** — present in both README (lines 45–53) and SKILL.md (lines 17–25). Consistent and accurate. The policy limiting work to `gpt54min` and `sonnet` is a runtime guardrail, not a code constraint, which is appropriate for this system.
+
+### What is missing
+
+1. **`summarize` skill status is unresolved.** The explore-llm-wiki-20260405.txt artifact (section 6.5, line 305) identified that the `summarize` skill was NOT FOUND in ~/clawd/skills/ and is presumably a bundled OpenClaw skill. SKILL.md addresses this with the skill taxonomy note (lines 27–32), but neither README nor SKILL.md state explicitly whether `summarize` is confirmed-available in the user's OpenClaw installation. If `summarize` is not bundled in the installed OpenClaw version, YouTube ingestion is broken at the tool call step. This was a Critical issue in the v1 explore and is not explicitly resolved in v3.
+   Severity: High (if unresolved) / Non-issue (if confirmed bundled).
+
+2. **No query-output filing workflow.** README honestly acknowledges this gap (line 138: "no standardized query-output filing workflow yet"). SKILL.md has no query section at all — the query engine role is described in the intro but there is no Query section corresponding to Ingest / Compile / Lint. Plan-003 (line 52) also identified this as a gap. For an agent that needs to file query results back into the wiki substrate, there is no protocol.
+   This is an acknowledged gap, not a bug. But it means the "query engine" role is described but not operationalized.
+   Severity: Medium (acknowledged, deferred by design).
+
+3. **L3 MEMORY.md promotion has no protocol.** The memory architecture describes L3 (MEMORY.md) as "curated durables, auto-injected" but neither the SKILL.md compile procedure nor the lint checks include any step for surfacing compiled knowledge into L3. An agent performing a compile has no guidance on when or how to promote findings to L3. The explore-llm-wiki-20260405.txt artifact identified this as Gap 4 (line 354). It remains unaddressed.
+   Severity: Low (consistent with current "protocol + linter" scope).
+
+### What is misleading
+
+1. **Lint schedule uses relative date format in the cron command.** SKILL.md line 177:
+   ```
+   python3 /Users/johanesalxd/Developer/git/llm-wiki/scripts/lint.py --output /tmp/llm-wiki-lint-$(date +%Y%m%d).md
+   ```
+   The `/tmp/` output path for a "suggested cron-friendly command" is technically correct but semantically misleading — lint reports saved to /tmp/ are ephemeral and will be lost after a reboot. This was raised in explore-llm-wiki-readme-20260405.txt (section 5.3). A better path would be `~/clawd/memory/raw/lint-$(date +%Y%m%d).md` (matching the convention shown in the Running lint section immediately above). Not a blocking issue but slightly inconsistent.
+   File: SKILL.md, line 177
+   Severity: Low.
+
+---
+
+## 4. STALE REFERENCES & CONCEPTUAL GAPS
+
+### Stale references (with file:line)
+
+| # | File | Line | Stale Content | What replaced it |
+|---|------|------|--------------|------------------|
+| S1 | references/source-routing.md | 108–111 | `ingest.py` slug gotcha blockquote with shell command | SKILL.md ingest step 3: ask Jo for meaningful slug |
+| S2 | references/source-routing.md | 156–157 | `ingest.py` NLM gotcha blockquote, `--type nlm` flag | SKILL.md lines 89–90: always ask for notebook name |
+| S3 | references/compile-conventions.md | 143–146 | `compile_helper.py smith-chain-of-thought` as step 1 of compile walkthrough | Use native `read` tool directly on the raw file |
+| S4 | references/compile-conventions.md | 184 | "lint and compile_helper parsers" — compile_helper is deleted | "lint parser" only |
+| S5 | SKILL.md | 184 | "no script needed" — defensive leftover from v2→v3 transition | Remove the phrase; the positive statement suffices |
+
+### Conceptual gaps (not stale references, but missing concepts)
+
+| # | Gap | Where it's acknowledged | Severity |
+|---|-----|------------------------|----------|
+| G1 | No Query section in SKILL.md — query engine role described but not operationalized | README line 138, plan-003 line 52 | Medium |
+| G2 | summarize skill bundled status unconfirmed | explore-20260405.txt line 305; v3 plans don't resolve it | High |
+| G3 | L3 MEMORY.md promotion has no protocol or lint check | explore-20260405.txt line 354 | Low |
+| G4 | compile-conventions.md "During compile" walkthrough is now misleading (script-based example, no native-tool equivalent) | plan-003 gap 3 | Medium |
+| G5 | No lint check for missing projects.md index entry when a new project file is created during compile | explore-20260405.txt gap 5 | Low |
+| G6 | No link/citation for Karpathy's LLM Knowledge Base pattern in README | explore-readme-20260405.txt item 19 | Low |
+
+---
+
+## 5. MISLEADING WORDING
+
+| # | File | Line | Current wording | Why it misleads | Recommended fix |
+|---|------|------|----------------|----------------|----------------|
+| W1 | references/source-routing.md | 108 | "when passed to `ingest.py`" | ingest.py was deleted; agents reading this will try to invoke a nonexistent script | Replace with: "When using the native ingest procedure, derive the slug manually" |
+| W2 | references/source-routing.md | 110 | `python3 scripts/ingest.py "https://youtube.com/watch?v=abc123" --slug karpathy-llm-os-talk` | Shell command for a deleted script | Replace example with SKILL.md step 3 native procedure reference |
+| W3 | references/source-routing.md | 157 | "Always pass `--type nlm` explicitly when calling the script" | No script exists; no `--type` flag was ever implemented | Replace with: "Always ask Jo for the notebook name before proceeding with the native ingest procedure" |
+| W4 | references/compile-conventions.md | 145 | `python3 scripts/compile_helper.py smith-chain-of-thought` | Deleted script | Replace with: "Read the raw file directly: `~/clawd/memory/raw/2026-04-05-smith-chain-of-thought.md`" |
+| W5 | references/compile-conventions.md | 184 | "lint and compile_helper parsers" | compile_helper.py is deleted | Replace with: "the lint parser" |
+| W6 | SKILL.md | 177 | `--output /tmp/llm-wiki-lint-$(date +%Y%m%d).md` | /tmp/ is ephemeral; misleading for a lint archive | Replace with: `--output ~/clawd/memory/raw/lint-$(date +%Y%m%d).md` |
+| W7 | SKILL.md | 184 | "no script needed" | Defensive leftover; implies a script alternative exists | Delete phrase; rewrite as: "Follow the Ingest procedure above using native `write`/`edit` tools directly." |
+
+---
+
+## 6. RECOMMENDATIONS (Prioritized by Severity)
+
+### CRITICAL
+
+None. The repo is in a stable, internally consistent state. No critical blockers exist for the first real end-to-end validation.
+
+### HIGH
+
+**H1 — Confirm `summarize` skill availability**
+The `summarize` skill is referenced for YouTube acquisition in SKILL.md (line 57) and source-routing.md (line 106). The v1 explore (2026-04-05) found it was NOT PRESENT in ~/clawd/skills/. The skill taxonomy note says bundled OpenClaw skills may live at `~/.local/share/mise/installs/node/24.13.0/lib/node_modules/openclaw/skills/`. Before ingesting the first YouTube source, verify whether `summarize` is bundled in the installed OpenClaw version. If not, either install it or update the routing table to use an alternative.
+Impact: YouTube ingestion is broken if summarize is absent; this is the only acquisition path for YouTube sources.
+Fix: Run `ls ~/.local/share/mise/installs/node/24.13.0/lib/node_modules/openclaw/skills/ | grep summarize` or equivalent. Update routing table or add a note if not found.
+
+### MEDIUM
+
+**M1 — Fix source-routing.md YouTube slug gotcha section (lines 108–111)**
+Replace the `ingest.py` shell command example with a description of the native ingest procedure equivalent. The conceptual warning (YouTube URLs produce weak slugs) is valid and useful; only the implementation reference is stale.
+File: references/source-routing.md, lines 108–111
+Fix: Replace blockquote with:
+  > **Slug gotcha:** YouTube `watch?v=` URLs produce an uninformative auto-slug. When ingesting a YouTube source, derive the slug manually (ask Jo for a meaningful name) before writing the raw stub. See SKILL.md ingest step 3.
+
+**M2 — Fix source-routing.md NLM gotcha section (lines 156–157)**
+Replace the `--type nlm` flag reference (never implemented, now irrelevant) with native procedure guidance.
+File: references/source-routing.md, lines 156–157
+Fix: Replace blockquote with:
+  > **Auto-detection gotcha:** NotebookLM notebooks cannot be identified from a URL or name automatically. Always ask Jo for the notebook name before starting the ingest procedure. Use the `notebooklm` skill (not `nlm`).
+
+**M3 — Fix compile-conventions.md "During compile" walkthrough (lines 143–146)**
+Replace the `compile_helper.py` step with native tool equivalent. This is the most actionable concrete example in the reference docs and is currently broken.
+File: references/compile-conventions.md, lines 143–146
+Fix: Replace step 1 with:
+  > 1. Read the raw file directly: `~/clawd/memory/raw/2026-04-05-smith-chain-of-thought.md`
+  Remove the `compile_helper.py` reference entirely. The remaining steps 2–4 are accurate.
+
+**M4 — Add a Query section to SKILL.md**
+The three-role model describes Vader as the query engine, but SKILL.md has no Query section. The Ingest / Compile / Lint sections are thorough operational protocols. Query deserves a minimal section — even if it is just "read compiled L2 files, use memory_search, cite sources when answering" — to complete the operational picture before first real use.
+File: SKILL.md
+Fix: Add a ## Query section after ## Lint. Minimal: what memory layers to consult, in what order, whether to file query results back (answer: not yet standardized — acknowledge this), and when to trigger a new ingest vs answer from existing memory.
+
+### LOW
+
+**L1 — Fix compile-conventions.md "Format note" (line 184)**
+Remove "compile_helper parsers" reference. Only lint parser applies.
+File: references/compile-conventions.md, line 184
+Fix: Change to: "Always use inline list format — multi-line YAML block lists are not supported by the lint parser."
+
+**L2 — Fix SKILL.md auto-ingest defensive wording (line 184)**
+Remove the "no script needed" phrase. It implies an alternative that does not exist.
+File: SKILL.md, line 184
+Fix: Change to: "Follow the Ingest procedure above using native `write`/`edit` tools directly."
+
+**L3 — Fix SKILL.md lint schedule cron path (line 177)**
+Change /tmp/ to ~/clawd/memory/raw/ for lint archive path consistency.
+File: SKILL.md, line 177
+Fix: `python3 /Users/johanesalxd/Developer/git/llm-wiki/scripts/lint.py --output ~/clawd/memory/raw/lint-$(date +%Y%m%d).md`
+
+**L4 — Add Karpathy reference link**
+README and SKILL.md both cite "Karpathy's LLM Knowledge Base pattern" with no link. Add a link or citation so a reviewer can evaluate conformance.
+File: README.md line 3, SKILL.md line 8
+Fix: Add inline link or a References section at the bottom of README.md.
+
+**L5 — Merge docs/llm-wiki-v3-architecture branch to main**
+The most recent commit (model policy addition, 163f80c) is on the feature branch, not main. All three commits are effectively complete and stable. The branch should be merged to main before the first real end-to-end validation.
+File: git state
+Fix: `git checkout main && git merge docs/llm-wiki-v3-architecture`
+
+**L6 — Clarify L3 MEMORY.md promotion (future)**
+No protocol exists for promoting compiled knowledge from L2 to L3 (MEMORY.md). This is acceptable for now (acknowledged as out of scope), but a single paragraph in SKILL.md noting "Vader may periodically assess whether compiled findings warrant promotion to MEMORY.md (L3) — this is judgment-based and not automated" would close the gap without adding scope.
+File: SKILL.md (add to Conventions section or after Compile)
+
+---
+
+## 7. RAW EVIDENCE
+
+### 7.1 Confirmed file inventory (disk vs README claim)
+
+README claims (lines 114–126):
+  llm-wiki/
+    README.md           ✓ exists
+    SKILL.md            ✓ exists
+    pyproject.toml      ✓ exists
+    scripts/
+      lint.py           ✓ exists
+    references/
+      source-routing.md ✓ exists
+      compile-conventions.md ✓ exists
+    .opencode/
+      plans/            ✓ exists
+
+README claims omitted (intentionally in "Not included"):
+  ingest.py            ✓ correctly absent
+  compile script       ✓ correctly absent
+  Obsidian integration ✓ correctly absent
+  index.md             ✓ correctly absent
+
+No discrepancy between README claims and disk reality.
+
+### 7.2 Stale script reference locations (grep results)
+
+references/source-routing.md:
+  Line 108: "when passed to `ingest.py`"
+  Line 110: "python3 scripts/ingest.py ..."
+  Line 157: "`ingest.py` **cannot** auto-detect..."
+
+references/compile-conventions.md:
+  Line 145: "python3 scripts/compile_helper.py smith-chain-of-thought"
+  Line 184: "lint and compile_helper parsers"
+
+All other .md files that mention ingest.py or compile_helper.py are in .opencode/plans/ (historical records — correct to leave as-is) or .opencode/artifacts/ (prior reports — correct to leave as-is).
+
+### 7.3 lint.py checks vs SKILL.md checks — consistency
+
+SKILL.md documents 6 lint checks (lines 143–158). lint.py implements 6 checks (lines 9–14 of docstring). They match:
+  1. Orphan scan            ✓ SKILL.md line 143 / lint.py check_orphans()
+  2. Stale scan             ✓ SKILL.md line 145 / lint.py check_stale()
+  3. Contradiction scan     ✓ SKILL.md line 148 / lint.py check_contradictions()
+  4. Orphan L2 scan         ✓ SKILL.md line 150 / lint.py check_orphan_l2()
+  5. Log integrity scan     ✓ SKILL.md line 152 / lint.py check_log_integrity()
+  6. Post-compile backlink  ✓ SKILL.md line 155 / lint.py check_compile_backlinks()
+
+This is fully consistent. Note: v1 README listed only 4 checks; the v3 README correctly lists all 6 indirectly via the SKILL.md reference pattern (README defers procedure detail to SKILL.md).
+
+### 7.4 lint.py LOG_ENTRY_RE pattern vs SKILL.md log format
+
+SKILL.md log format (ingest, line 83): `## [YYYY-MM-DD] ingest | <source-title> | <source-type> | <slug>`
+SKILL.md log format (compile, line 124): `## [YYYY-MM-DD] compile | <slug> | files updated: memory/project-foo.md, ...`
+
+lint.py LOG_ENTRY_RE (line 230–232):
+  r"^## \[\d{4}-\d{2}-\d{2}\] (?:ingest|compile) \| .+ \| .+ \| (.+)$"
+
+This regex expects 4 pipe-delimited fields. The ingest log format has 4 fields: [date], ingest, title, source-type, slug — the regex captures the last field (slug). This is correct for ingest entries.
+
+The compile log format has a different structure: `## [YYYY-MM-DD] compile | <slug> | files updated: <list>` — only 3 pipe-delimited fields (date context, compile, slug, files updated as one field). The LOG_ENTRY_RE requires 4 fields (`.+ \| .+ \| (.+)$`). Compile log entries will NOT match the regex and will be silently skipped in log integrity checks.
+
+This means: the log integrity check (Check 5) only validates ingest log entries, not compile log entries. Compile log entries will never trigger an orphaned log entry warning, even if the corresponding slug file is deleted. This is a lint.py correctness gap — not critical (compile logs are less critical than ingest logs for file-existence checks), but it's a discrepancy between what the check is documented to do and what it actually does.
+File: scripts/lint.py, line 230–232; SKILL.md lines 83, 124.
+Severity: Low (data integrity gap, not a blocking issue).
+
+### 7.5 Model policy — both documents consistent
+
+README lines 47–50:
+  "Standard llm-wiki work is limited to:
+  - `gpt54min`
+  - `sonnet`"
+
+SKILL.md lines 19–22:
+  "Standard llm-wiki work is limited to:
+  - `gpt54min`
+  - `sonnet`"
+
+Identical content. Consistent.
+
+### 7.6 pyproject.toml scope
+
+pyproject.toml (6 lines) contains only ruff config. No [project] table, no dependencies. This is consistent with the "stdlib only" design of lint.py (line 19: "Uses only stdlib. Compatible with python3 directly (no uv/pip needed)."). No inconsistency.
+
+### 7.7 .opencode/.gitignore analysis
+
+The .opencode/.gitignore ignores node_modules, package.json, package-lock.json, bun.lock, and .gitignore itself. However, the glob at the top level shows ALL of these ARE present on disk AND tracked via glob. This means these files are present in the working directory but the .gitignore is inside .opencode/ — it only applies to files WITHIN .opencode/. Whether these are committed to git would require a `git ls-files` check, but given the .gitignore is within the .opencode subdirectory, it should be preventing node_modules etc. from being tracked at the repo level. This appears correct by design — the .opencode/node_modules/ is a local development artifact for the OpenCode plugin, not a repo dependency.
+
+### 7.8 Branch state
+
+Current HEAD is on docs/llm-wiki-v3-architecture (not main). The three commits on this branch represent the complete v3 work. Main has the v1/v2 work only (b78900e is likely the simplify-scripts commit on main; 553ee13 and 163f80c are v3 additions on the feature branch). The feature branch should be merged to main before the first real end-to-end validation run.
+
+---
+
+END OF REPORT

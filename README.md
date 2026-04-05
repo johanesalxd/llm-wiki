@@ -42,6 +42,41 @@ For this repo, **Vader / OpenClaw** plays three roles:
 
 A future **human-consumption frontend** like Obsidian may be added later, but it is **not** required for the current architecture.
 
+### High-level flow
+
+```mermaid
+flowchart TD
+    A[Jo drops link / file / blob / task / source] --> B[Vader intake triage]
+
+    B -->|Source is good enough| C[Direct ingest]
+    B -->|Needs a little more context| D[Quick context pass first]
+    B -->|Use formal Light Analysis protocol| E[Light Analysis skill first]
+    B -->|Use formal Deep Analysis protocol| F[Deep Analysis skill first]
+    B -->|Action item only| G[Not wiki / action-only]
+
+    E --> H[Follow ~/clawd/skills/deep-analysis/SKILL.md]
+    F --> H
+
+    C --> I[Acquire source with the right tool]
+    I --> J[Write raw record into memory/raw]
+    J --> K[Compile into L2 memory]
+    K --> L[Run lint when needed]
+    L --> M[Query against compiled wiki]
+
+    D --> N[Clarify context and choose canonical source(s)]
+    N --> C
+
+    H --> O[Produce structured analysis]
+    O --> P[Promote durable sources or synthesis into llm-wiki]
+    P --> J
+
+    G --> Q[Execute / track normally]
+
+    M --> R[Optional future file-back of durable query outputs]
+```
+
+This diagram is intentionally aligned with `SKILL.md`, which is the source of truth for behavior.
+
 ### Model policy
 
 Standard llm-wiki work is limited to:
@@ -57,6 +92,20 @@ Do not downgrade llm-wiki work to cheaper/weaker models unless Jo explicitly ask
 ## Operating model
 
 There are five distinct concepts in this system:
+
+### Pre-ingest triage
+Before any ingest, Vader decides the right processing depth:
+- **direct ingest** when the source is already canonical enough
+- **quick context pass first** when context is incomplete and the best source still needs to be identified
+- **formal Light Analysis protocol first** when the named Light Analysis mode should be used
+- **formal Deep Analysis protocol first** when the named Deep Analysis mode should be used
+- **not wiki / action-only** when the item is really just a task or reminder
+
+Important distinction:
+- **quick context pass** is a lightweight triage/synthesis step and is **not** the formal Light Analysis protocol
+- formal **Light Analysis** / **Deep Analysis** are governed by `~/clawd/skills/deep-analysis/SKILL.md`
+
+Dropping a source into chat does not mean it should be ingested blindly.
 
 ### 1. Acquisition
 Turn an external source into usable text, images, or extracted content.

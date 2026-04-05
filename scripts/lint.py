@@ -184,15 +184,28 @@ BACKLINK_RE = re.compile(r"Source:\s*memory/raw/", re.IGNORECASE)
 SECTION_HEADER_RE = re.compile(r"^#{1,4}\s+(.+)")
 
 
-def check_orphan_l2(memory_dir: Path) -> list[dict]:
-    """Find sections in project-*.md files with no backlink to a raw source."""
-    results = []
+def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
+    """Find uncited sections in project files, split into current vs legacy backlog.
+
+    Migration-aware policy:
+    - if a project file has never had any raw backlink, all uncited sections are legacy
+    - if a project file has at least one raw backlink, uncited sections before the first
+      backlink are treated as legacy backlog; uncited sections after that point are treated
+      as current orphan-L2 issues
+    """
+    current_results = []
+    legacy_results = []
     if not memory_dir.exists():
-        return results
+        return current_results, legacy_results
     for md_file in sorted(memory_dir.glob("project-*.md")):
         text = read_file_safe(md_file)
         lines = text.splitlines()
-        # Split into sections by H2/H3 headers, track whether each has a backlink
+        first_backlink_line = None
+        for i, line in enumerate(lines, start=1):
+            if BACKLINK_RE.search(line):
+                first_backlink_line = i
+                break
+
         sections: list[dict] = []
         current_section: dict | None = None
         for i, line in enumerate(lines):
@@ -214,16 +227,19 @@ def check_orphan_l2(memory_dir: Path) -> list[dict]:
             sections.append(current_section)
 
         for section in sections:
-            if not section["has_backlink"]:
-                results.append(
-                    {
-                        "file": md_file.name,
-                        "path": str(md_file),
-                        "section": section["header"],
-                        "line_number": section["line_number"],
-                    }
-                )
-    return results
+            if section["has_backlink"]:
+                continue
+            item = {
+                "file": md_file.name,
+                "path": str(md_file),
+                "section": section["header"],
+                "line_number": section["line_number"],
+            }
+            if first_backlink_line is None or section["line_number"] < first_backlink_line:
+                legacy_results.append(item)
+            else:
+                current_results.append(item)
+    return current_results, legacy_results
 
 
 # Check 5: log.md integrity — orphaned log entries with no raw file on disk
@@ -317,6 +333,7 @@ def build_report(
     stale: list[dict],
     contradictions: list[dict],
     orphan_l2: list[dict],
+    legacy_orphan_l2: list[dict],
     log_integrity: list[dict],
     compile_backlinks: list[dict],
     raw_dir: Path,
@@ -339,7 +356,8 @@ def build_report(
         + len(log_integrity)
         + len(compile_backlinks)
     )
-    lines.append(f"**Total issues: {total_issues}**")
+    lines.append(f"**Total current issues: {total_issues}**")
+    lines.append(f"**Legacy migration backlog: {len(legacy_orphan_l2)}**")
     lines.append("")
     lines.append("| Check | Issues |")
     lines.append("|---|---|")
@@ -349,6 +367,7 @@ def build_report(
     lines.append(f"| 4. Orphan L2 scan (no backlink) | {len(orphan_l2)} |")
     lines.append(f"| 5. Log integrity (orphaned log entries) | {len(log_integrity)} |")
     lines.append(f"| 6. Post-compile backlink check | {len(compile_backlinks)} |")
+    lines.append(f"| Legacy uncited L2 backlog | {len(legacy_orphan_l2)} |")
     lines.append("")
 
     # Orphan scan
@@ -412,13 +431,12 @@ def build_report(
     lines.append("---")
     lines.append("")
     lines.append(
-        f"## Orphan L2 scan — {len(orphan_l2)} section(s) with no raw source backlink"
+        f"## Orphan L2 scan — {len(orphan_l2)} current section(s) with no raw source backlink"
     )
     lines.append("")
     if orphan_l2:
         lines.append(
-            "These sections in project files have no `Source: memory/raw/...` backlink — "
-            "knowledge asserted without a cited source."
+            "These sections appear in llm-wiki-managed portions of project files and have no `Source: memory/raw/...` backlink."
         )
         lines.append("")
         for item in orphan_l2:
@@ -426,7 +444,27 @@ def build_report(
                 f"- `{item['file']}` line {item['line_number']}: {item['section']}"
             )
     else:
-        lines.append("_No orphan L2 sections found._")
+        lines.append("_No current orphan L2 sections found._")
+    lines.append("")
+
+    # Legacy orphan L2 backlog
+    lines.append("---")
+    lines.append("")
+    lines.append(
+        f"## Legacy uncited L2 scan — {len(legacy_orphan_l2)} backlog section(s)"
+    )
+    lines.append("")
+    if legacy_orphan_l2:
+        lines.append(
+            "These sections predate llm-wiki backlink discipline or sit earlier in migrated project files. They are migration backlog, not current llm-wiki failures."
+        )
+        lines.append("")
+        for item in legacy_orphan_l2:
+            lines.append(
+                f"- `{item['file']}` line {item['line_number']}: {item['section']}"
+            )
+    else:
+        lines.append("_No legacy uncited L2 backlog found._")
     lines.append("")
 
     # Check 5: log integrity
@@ -529,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
     orphans = check_orphans(raw_dir)
     stale = check_stale(raw_dir, stale_days=args.stale_days)
     contradictions = check_contradictions(memory_dir)
-    orphan_l2 = check_orphan_l2(memory_dir)
+    orphan_l2, legacy_orphan_l2 = check_orphan_l2(memory_dir)
     log_integrity = check_log_integrity(raw_dir)
     compile_backlinks = check_compile_backlinks(raw_dir, memory_dir)
 
@@ -538,6 +576,7 @@ def main(argv: list[str] | None = None) -> int:
         stale,
         contradictions,
         orphan_l2,
+        legacy_orphan_l2,
         log_integrity,
         compile_backlinks,
         raw_dir,

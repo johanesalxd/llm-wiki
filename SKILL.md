@@ -33,6 +33,51 @@ Do not downgrade llm-wiki work to cheaper/weaker models unless Jo explicitly ask
 
 ---
 
+## Pre-ingest triage
+
+When Jo drops a link, file, blob, task item, or source reference into chat, Vader should decide the right processing depth **before ingesting anything**.
+
+This is a **pre-ingest** stage, not compile time.
+
+There are five valid outcomes:
+
+1. **Direct ingest**
+   - Use when the source is already canonical enough to preserve directly.
+   - Example: a clean article URL, gist, PDF, repo README, tweet thread, or notebook reference with obvious long-term value.
+   - Path: acquire source -> write raw record -> compile into L2.
+
+2. **Quick context pass first**
+   - Use when the source is real but context is incomplete, multiple candidate links exist, or the importance is still being established.
+   - This is a lightweight triage/synthesis pass only — **not** the formal Light Analysis protocol.
+   - Path: quick understanding pass -> choose canonical source(s) -> then ingest what matters.
+
+3. **Formal Light Analysis protocol first**
+   - Use when the source/topic warrants the named workspace Light Analysis mode.
+   - Governed by: `~/clawd/skills/deep-analysis/SKILL.md`
+   - Path: run the formal Light Analysis protocol first -> then decide which source(s) or conclusions should be ingested.
+
+4. **Formal Deep Analysis protocol first**
+   - Use when the topic is strategically important, ambiguous, contested, or valuable enough that a full structured analysis should come before persistence.
+   - Governed by: `~/clawd/skills/deep-analysis/SKILL.md`
+   - Path: run the formal Deep Analysis protocol first -> then promote key sources or durable synthesis into llm-wiki.
+
+5. **Not wiki / action-only**
+   - Use when the input is really a task, reminder, or execution request rather than knowledge worth preserving.
+   - Path: execute or track normally; do not ingest unless durable knowledge emerges.
+
+### Pre-ingest triage rule
+
+Vader has autonomy to choose the processing strategy. Dropping a source into chat does **not** imply blind ingest.
+
+The governing rule is:
+- if the source is already good enough -> ingest it
+- if the source needs just a little more context -> do a quick context pass first
+- if the source/topic warrants the formal Light Analysis protocol -> use `~/clawd/skills/deep-analysis/SKILL.md`
+- if the source/topic warrants the formal Deep Analysis protocol -> use `~/clawd/skills/deep-analysis/SKILL.md`
+- if it is just an action item -> do not force it into the wiki
+
+Formal Light/Deep Analysis may arise not only from dropped links/files but also from the live conversation itself.
+
 ## Ingest
 
 Add a new source to the knowledge base.
@@ -103,7 +148,11 @@ Integrate a raw source into L2 memory files.
    - Read `~/clawd/memory/projects.md` index for active projects.
    - Scan `~/clawd/memory/project-*.md` files for topically related sections.
    - If no project file matches, use a dated note: `~/clawd/memory/YYYY-MM-DD.md`.
-4. For each relevant L2 file, add a summary section using the `edit` tool:
+4. Route using judgment, not rigid user micromanagement:
+   - update an existing `project-*.md` when the source clearly extends an active topic
+   - create a new `project-*.md` when the topic is distinct and likely to attract multiple future sources
+   - use a dated note when the source is one-off, low-priority, or not yet clearly durable
+5. For each relevant L2 file, add a summary section using the `edit` tool:
    - Write a concise summary of the source's key insights.
    - Add a backlink: `Source: memory/raw/YYYY-MM-DD-<slug>.md`
    - Note any contradiction with existing content using the flag:
@@ -111,20 +160,36 @@ Integrate a raw source into L2 memory files.
      ⚠️ CONTRADICTION: <description of the contradiction>
      ```
    - Add cross-references to related sections where relevant.
-5. Update the raw doc's frontmatter using the `edit` tool:
+6. Update the raw doc's frontmatter using the `edit` tool:
    ```yaml
    compiled: true
    compiled_date: YYYY-MM-DD
    compiled_into: ["memory/project-foo.md", "memory/project-bar.md"]
    ```
    Always use inline list format for `compiled_into` — multi-line YAML block lists are not supported by the lint parser.
-6. Update `~/clawd/memory/projects.md` to reflect any new projects or updated project files created during compile.
-7. Append a compile entry to `~/clawd/memory/raw/log.md`:
+7. Update `~/clawd/memory/projects.md` to reflect any new projects or updated project files created during compile.
+8. Append a compile entry to `~/clawd/memory/raw/log.md`:
    ```
    ## [YYYY-MM-DD] compile | <slug> | files updated: memory/project-foo.md, memory/project-bar.md
    ```
 
 For detailed conventions on L2 integration (when to create new files, how to handle multi-topic sources, backlink format), see `references/compile-conventions.md`.
+
+### Post-lint routing and refactoring
+
+llm-wiki lint is allowed to surface structural drift such as:
+- mixed-topic project files
+- sections that likely belong in a different `project-*.md`
+- durable subsections that deserve promotion into their own project file
+- dated notes that should be promoted into project memory
+
+When lint surfaces this signal, Vader should treat refactoring as part of the llm-wiki maintenance workflow:
+- re-home sections when the topical fit is clear
+- split an overloaded project file when a distinct thread has become durable
+- promote a recurring subsection into its own `project-*.md`
+- update `memory/projects.md` accordingly
+
+This refactoring is judgment-based. Jo should not have to micromanage file placement unless the reorganization is broad or ambiguous.
 
 ---
 
