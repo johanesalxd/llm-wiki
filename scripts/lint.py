@@ -227,30 +227,40 @@ def check_orphan_l2(memory_dir: Path) -> list[dict]:
 
 
 # Check 5: log.md integrity — orphaned log entries with no raw file on disk
-LOG_ENTRY_RE = re.compile(
-    r"^## \[\d{4}-\d{2}-\d{2}\] (?:ingest|compile) \| .+ \| .+ \| (.+)$"
+INGEST_LOG_RE = re.compile(
+    r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| .+ \| .+ \| (.+)$"
+)
+COMPILE_LOG_RE = re.compile(
+    r"^## \[(\d{4}-\d{2}-\d{2})\] compile \| (.+?) \| files updated: .+$"
 )
 
 
 def check_log_integrity(raw_dir: Path) -> list[dict]:
-    """Warn for log entries whose slug has no corresponding raw file on disk."""
+    """Warn for log entries whose referenced raw source has no file on disk."""
     results = []
     log_path = raw_dir / "log.md"
     if not log_path.exists():
         return results
     log_text = read_file_safe(log_path)
     for i, line in enumerate(log_text.splitlines(), start=1):
-        m = LOG_ENTRY_RE.match(line.strip())
-        if not m:
+        text = line.strip()
+        ingest_match = INGEST_LOG_RE.match(text)
+        compile_match = COMPILE_LOG_RE.match(text)
+
+        if ingest_match:
+            _, slug = ingest_match.groups()
+        elif compile_match:
+            _, slug = compile_match.groups()
+        else:
             continue
-        slug = m.group(1).strip()
+
         pattern = f"*-{slug}.md"
         matches = list(raw_dir.glob(pattern))
         if not matches:
             results.append(
                 {
                     "line_number": i,
-                    "line": line.strip(),
+                    "line": text,
                     "slug": slug,
                 }
             )

@@ -93,7 +93,7 @@ If a raw source is relevant to more than one project or topic:
    ```yaml
    compiled_into: ["memory/project-llm-reasoning.md", "memory/project-prompt-engineering.md"]
    ```
-   Always use inline list format — the lint and compile_helper parsers do not support multi-line YAML block lists.
+   Always use inline list format — the lint parser and current conventions assume inline list formatting here.
 
 Do not add a single monolithic dump to one file and skip the others — this creates orphan L2 sections in the files that were skipped.
 
@@ -142,8 +142,8 @@ Key findings:
 
 ### During compile
 
-1. Run `python3 scripts/compile_helper.py smith-chain-of-thought`
-2. Tags suggest `memory/project-llm-reasoning.md` and `memory/project-prompt-engineering.md`
+1. Read the raw file frontmatter and body in full
+2. Use `memory/projects.md` plus relevant `memory/project-*.md` files to identify the right L2 targets
 3. Read both project files to understand existing content
 4. Add summary sections to each
 
@@ -181,7 +181,7 @@ tags: ["chain-of-thought", "reasoning", "prompting"]
 ---
 ```
 
-> **Format note:** Always use inline list format for `compiled_into`. Multi-line YAML block lists (with `- item` on separate lines) are not supported by the lint and compile_helper parsers.
+> **Format note:** Always use inline list format for `compiled_into`. Multi-line YAML block lists (with `- item` on separate lines) are not part of the standard llm-wiki flow.
 
 ### After (log entry appended)
 

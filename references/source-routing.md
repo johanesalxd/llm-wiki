@@ -21,7 +21,7 @@ Extended version of the routing table in SKILL.md. Covers URL patterns, file ext
 | Image / screenshot | Extension `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff` | `vision-sandbox` skill | Works for both local files and image URLs |
 | YouTube video | Domain `youtube.com` or `youtu.be` | `summarize` skill | Covers standard watch URLs and short links |
 | X / Twitter thread | Domain `x.com` or `twitter.com` | `bird thread <url>` | See thread vs single tweet edge case below |
-| NotebookLM notebook | NLM notebook name (not a URL) | `notebooklm` skill | **Cannot be auto-detected** — requires `--type nlm` flag; input is notebook name, not a URL |
+| NotebookLM notebook | NLM notebook name (not a URL) | `notebooklm` skill | **Cannot be auto-detected** from the input alone; input is notebook name, not a URL |
 
 ---
 
@@ -105,10 +105,7 @@ https://youtube.com/shorts/abcdef123
 
 Tool: `summarize` skill with the video URL.
 
-> **Slug gotcha:** Standard `watch?v=` YouTube URLs produce the weak auto-slug `watch` when passed to `ingest.py`. Always use `--slug <meaningful-name>` for YouTube URLs:
-> ```sh
-> python3 scripts/ingest.py "https://youtube.com/watch?v=abc123" --slug karpathy-llm-os-talk
-> ```
+> **Slug gotcha:** Standard `watch?v=` YouTube URLs often collapse to the useless slug `watch` if an agent derives the filename from the URL path alone. When ingesting YouTube sources, always choose a meaningful slug based on the actual video/topic, e.g. `karpathy-llm-os-talk`.
 
 **Edge cases:**
 
@@ -154,7 +151,7 @@ Identified by the user providing a notebook name rather than a URL.
 
 Tool: `notebooklm` skill with the notebook name.
 
-> **Auto-detection gotcha:** `ingest.py` **cannot** auto-detect NotebookLM notebooks from a URL or name. Always pass `--type nlm` explicitly when calling the script with an NLM source. The `notebooklm` skill is the correct skill name — not `nlm`.
+> **Auto-detection gotcha:** NotebookLM notebooks cannot be inferred reliably from a raw URL or free-text name alone. Treat them as a manual routing case. The correct skill name is `notebooklm` — not `nlm`.
 
 Edge case: if the user provides a NotebookLM share URL (`notebooklm.google.com/...`), use `web_fetch` first to check if the content is publicly accessible, then route to `notebooklm` if a notebook name can be identified.
 
@@ -184,5 +181,10 @@ If the source input does not look like a URL or a local file path, ask the user 
 - Is this a NotebookLM notebook name?
 - Is this a local file path (provide the full path)?
 - Is this a search query or topic (not an ingestable source)?
+
+For any referenced skill, check the corresponding SKILL.md first before assuming invocation details. Discoverability spans three roots:
+- local skills: `~/clawd/skills/`
+- bundled OpenClaw skills: `~/.local/share/mise/installs/node/24.13.0/lib/node_modules/openclaw/skills/`
+- extra/extension-provided skills
 
 Do not guess — routing the wrong source type wastes time and produces a malformed stub.

@@ -128,6 +128,21 @@ For detailed conventions on L2 integration (when to create new files, how to han
 
 ---
 
+## Query
+
+Ask questions against the compiled wiki.
+
+In this adaptation, Vader / OpenClaw is the query engine. Query work is read-heavy and should prefer the compiled memory substrate first:
+
+1. Start with the most relevant L2 files (`memory/project-*.md`, dated notes, `memory/projects.md`).
+2. Use `memory_search` when recall across `memory/*.md` is needed.
+3. Read raw files in `memory/raw/` only when the compiled layer is missing detail, provenance, or exact wording.
+4. Synthesize answers from the compiled substrate whenever possible instead of re-deriving everything from raw sources.
+
+**Current limitation:** query outputs are not yet standardized as first-class wiki artifacts. If a query produces durable insight worth preserving, Vader should route it into normal memory maintenance deliberately instead of inventing an ad hoc format.
+
+---
+
 ## Lint
 
 Wiki health check. Reports problems — never auto-fixes.
@@ -181,7 +196,7 @@ python3 /Users/johanesalxd/Developer/git/llm-wiki/scripts/lint.py --output /tmp/
 
 ## Auto-ingest (Vader-triggered)
 
-When Jo drops a URL or file path into conversation without an explicit instruction, Vader should automatically trigger ingest without being asked. Follow the Ingest procedure above using native `write`/`edit` tools directly — no script needed.
+When Jo drops a URL or file path into conversation without an explicit instruction, Vader should automatically trigger ingest without being asked. Follow the Ingest procedure above using native `write`/`edit` tools directly.
 
 **Exception:** If the URL appears to be a NotebookLM link or Jo mentions it is an NLM source, prompt for the notebook name/type before ingesting.
 
