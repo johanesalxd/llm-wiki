@@ -35,6 +35,8 @@ This repo is inspired by:
 
 ## Tiered memory architecture
 
+This repo adds an **L0 raw-source layer** on top of the broader OpenClaw workspace memory model described in the OpenClaw public guide. That is why this README starts at L0 while the broader workspace guide usually starts at L1.
+
 The system uses a four-layer markdown memory stack.
 
 ```text
