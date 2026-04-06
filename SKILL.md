@@ -5,16 +5,39 @@ description: "LLM Knowledge Base skill — ingest raw sources into a markdown so
 
 # llm-wiki skill
 
-Implements Karpathy's LLM Knowledge Base pattern for an agent-maintained markdown knowledge base. Three core wiki operations: **Ingest**, **Compile**, **Lint**.
+> **Public mirror note:** This file is the public mirror of a richer local/private source of truth used in daily operation. Differences should be limited to local paths, workspace-specific filenames, and private runtime details — not the core workflow.
+
+Implements Karpathy's LLM Knowledge Base pattern for an OpenClaw-managed markdown knowledge base. Three core wiki operations: **Ingest**, **Compile**, **Lint**.
+
+This public file mirrors a local/private source of truth, but it intentionally keeps the same OpenClaw-shaped memory architecture:
+- `memory/raw/` = L0 raw source layer
+- `short-term-memory.md` = L1 active/session state
+- `memory/` = L2 compiled project + dated notes
+- `MEMORY.md` = L3 curated durables
 
 Reference anchor: Andrej Karpathy, *A pattern for building personal knowledge bases using LLMs* — https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 
-In this adaptation, the agent plays three roles:
-- **point of ingestion** — the user provides a URL, file, blob, or external reference
-- **orchestrator** — the agent chooses the right acquisition tool, writes the raw record, compiles it into the wiki, and runs lint when needed
+In this adaptation, **OpenClaw** is the runtime layer:
+- **point of ingestion** — the user drops a URL, file, blob, or external reference into chat
+- **orchestrator** — the agent chooses the right upstream acquisition tool/skill, writes the raw record, compiles it into memory, and runs lint
 - **query engine** — the agent answers against the compiled markdown substrate using direct reads, search, project files, dated notes, and raw sources
 
-A human-facing mirror or reader layer may exist, but it is not the canonical store and is not required for the core architecture.
+Operational default:
+- preserve raw first, compile second
+- for YouTube, preserve the **full transcript** when available
+- when the transcript is large, use a main raw source file plus a `-transcript` companion file
+
+**Obsidian** can be used as a human-facing read-only mirror / consumption layer. It is not the canonical store and is not required for the core architecture.
+
+## Model policy
+
+In the reference OpenClaw deployment, standard llm-wiki work is limited to:
+- `gpt54min`
+- `sonnet`
+
+Adapt that model policy to your own runtime if needed, but keep the bar high enough that the persistent memory substrate stays coherent.
+
+---
 
 ## Ingestion depth model
 
@@ -24,7 +47,7 @@ Use this ladder to choose how much processing a source deserves.
   - Use when the source is worth archiving but not yet worth synthesis.
 - **Depth 1 — Raw + wiki compression**
   - Default for clean, worthwhile sources.
-  - Preserve immutable raw, then add a concise summary to the compiled layer.
+  - Preserve immutable raw, then add a concise L2 summary.
 - **Depth 2 — Quick context pass + ingest**
   - Use when the source bundle needs light framing or canonical-source selection.
 - **Depth 3 — Light Analysis + promote**
@@ -36,7 +59,7 @@ Default behavior: choose the lowest depth that preserves long-term value without
 
 ## Pre-ingest triage
 
-When the user provides a link, file, blob, task item, or source reference, decide the right processing depth **before ingesting anything**.
+When the user drops a link, file, blob, task item, or source reference into chat, decide the right processing depth **before ingesting anything**.
 
 This is a **pre-ingest** stage, not compile time.
 
@@ -45,7 +68,7 @@ There are five valid outcomes:
 1. **Direct ingest**
    - Use when the source is already canonical enough to preserve directly.
    - Example: a clean article URL, gist, PDF, repo README, tweet thread, or notebook reference with obvious long-term value.
-   - Path: acquire source -> write raw record -> compile into the wiki.
+   - Path: acquire source -> write raw record -> compile into L2.
 
 2. **Quick context pass first**
    - Use when the source is real but context is incomplete, multiple candidate links exist, or the importance is still being established.
@@ -53,7 +76,7 @@ There are five valid outcomes:
    - Path: quick understanding pass -> choose canonical source(s) -> then ingest what matters.
 
 3. **Formal Light Analysis protocol first**
-   - Use when the source/topic warrants a named Light Analysis mode in the current workspace.
+   - Use when the source/topic warrants a named Light Analysis mode in the current runtime.
    - Path: run the formal Light Analysis protocol first -> then decide which source(s) or conclusions should be ingested.
 
 4. **Formal Deep Analysis protocol first**
@@ -68,13 +91,13 @@ There are five valid outcomes:
 
 The agent has autonomy to choose the processing strategy. Dropping a source into chat does **not** imply blind ingest.
 
-The governing rule is:
-- if the source is already good enough -> ingest it
-- if the source needs just a little more context -> do a quick context pass first
-- if the source/topic warrants a formal analysis protocol -> use that first
-- if it is just an action item -> do not force it into the wiki
+Rule:
+- source already good enough -> ingest it
+- source needs light context -> do a quick context pass first
+- source/topic needs structured judgment -> use Light or Deep Analysis first
+- action item only -> do not force it into the wiki
 
-Formal analysis may arise not only from dropped links/files but also from the live conversation itself.
+Formal Light/Deep Analysis may arise not only from dropped links/files but also from the live conversation itself.
 
 ## Ingest
 
@@ -84,8 +107,8 @@ Add a new source to the knowledge base.
 
 Do not confuse **acquisition** with **ingest**.
 
-- **Acquisition** = use the right upstream tool or skill to extract the source content
-- **Ingest** = write the resulting source record into the raw layer
+- **Acquisition** = use the right upstream tool/skill to extract the source content
+- **Ingest** = write the resulting source record into `memory/raw/`
 
 The tools in the routing table below are acquisition tools. The wiki protocol begins once the source is captured into the raw layer.
 
@@ -105,12 +128,13 @@ The tools in the routing table below are acquisition tools. The wiki protocol be
 1. Detect source type from the URL pattern or file extension (see `references/source-routing.md` for edge cases).
 2. Call the appropriate tool to fetch, summarize, or extract the source content.
 3. For YouTube sources, do a minimal acquisition pass first so the agent can identify the video properly before naming it. Do not preserve raw YouTube IDs or guess from the URL alone.
-4. Derive a slug from the confirmed source title: kebab-case, max 6 words. For YouTube `watch?v=` or `youtu.be` URLs, do not auto-derive from the URL token; use the confirmed title/topic after the minimal acquisition pass, and ask the user only if the title still leaves the slug ambiguous.
-5. Write the stub file directly into the raw layer using this filename shape:
+4. If transcript or caption text is available for a YouTube source, preserve the **full transcript** in the raw layer. Chapter maps and source descriptions are supporting metadata, not substitutes for transcript preservation.
+5. Derive a slug from the confirmed source title: kebab-case, max 6 words. For YouTube `watch?v=` or `youtu.be` URLs, do not auto-derive from the URL token; use the confirmed title/topic after the minimal acquisition pass, and ask the user only if the title still leaves the slug ambiguous.
+6. Write the raw file directly using the filename shape:
    ```
-   raw/YYYY-MM-DD-<slug>.md
+   memory/raw/YYYY-MM-DD-<slug>.md
    ```
-   The file should include frontmatter like:
+   Use today's date. The file must include this frontmatter at the top, followed by the fetched content body:
    ```yaml
    ---
    title: <source title>
@@ -122,16 +146,18 @@ The tools in the routing table below are acquisition tools. The wiki protocol be
    tags: []
    ---
    ```
-6. Append an entry to the raw-layer log in this format:
+7. Append an entry to the raw-layer log (create with header if not exists):
    ```
    ## [YYYY-MM-DD] ingest | <source-title> | <source-type> | <slug>
    ```
-   The log is append-only — never edit existing entries.
+   The log in `memory/raw/log.md` is append-only — never edit existing entries.
 
 ### Ingest gotchas
 
 - **NotebookLM sources:** They are often ambiguous from the initial input alone. Confirm the notebook identifier or share link if needed.
-- **YouTube URLs:** Standard `watch?v=` or `youtu.be` URLs produce a useless slug. Default behavior is: minimal acquisition pass first -> confirm what the video actually is -> choose a meaningful slug -> write raw. Ask the user only if the title/topic still leaves the slug ambiguous.
+- **YouTube URLs:** Standard `watch?v=` or `youtu.be` URLs produce a useless slug. Default behavior is: minimal acquisition pass first -> confirm what the video actually is -> choose a meaningful slug -> preserve the full transcript if available -> write raw. Ask the user only if the title/topic still leaves the slug ambiguous.
+
+---
 
 ## YouTube intake protocol
 
@@ -140,15 +166,17 @@ Use this for `youtube.com` or `youtu.be` sources.
 1. Run a **minimal acquisition pass first** to obtain transcript, captions, or a stable description.
 2. Confirm what the video actually is before naming it.
 3. Choose a meaningful slug from the confirmed title/topic.
-4. Write the immutable raw record in the raw layer.
-5. Decide compile depth and compile destination after the source is identified.
-6. Ask the user only if title/topic ambiguity still remains after minimal acquisition.
+4. If transcript/captions are available, preserve the **full transcript** in the raw layer.
+5. Store chapter maps, descriptions, timestamps, and acquisition notes as supporting metadata around the transcript — not as a replacement for it.
+6. If the transcript is too large or awkward for a single raw file, create a companion raw file named `YYYY-MM-DD-<slug>-transcript.md` and reference it from the main raw source file.
+7. Decide compile depth and compile destination after the source is identified.
+8. Ask the user only if title/topic ambiguity still remains after minimal acquisition.
 
-Rule: **raw-first, but not blind**. Do not preserve bare YouTube IDs as if they were meaningful knowledge artifacts.
+Rule: **raw-first, but not blind**. Do not preserve bare YouTube IDs as if they were meaningful knowledge artifacts. For serious long-form videos, transcript-first preservation is the default.
 
 ## Compile
 
-Integrate a raw source into the compiled wiki layer.
+Integrate a raw source into L2 memory files.
 
 ### Compile procedure
 
@@ -181,7 +209,7 @@ Example:
      - **Why it matters here**
      - **Key takeaways**
      - **Routing / usage implication** (for operational sources)
-   - Add a backlink: `Source: raw/YYYY-MM-DD-<slug>.md`
+   - Add a backlink: `Source: memory/raw/YYYY-MM-DD-<slug>.md`
    - Note any contradiction with the flag:
      ```
      ⚠️ CONTRADICTION: <description of the contradiction>
@@ -221,14 +249,16 @@ This refactoring is judgment-based.
 
 Ask questions against the compiled wiki.
 
-The agent is the query runtime. Query work is read-heavy and should prefer the compiled markdown substrate first:
+In this adaptation, OpenClaw is the query engine. Query work is read-heavy and should prefer the compiled markdown substrate first:
 
-1. Start with the most relevant compiled files.
+1. Start with the most relevant L2 files (`memory/project-*.md`, dated notes, `memory/projects.md`).
 2. Use search when recall across many markdown files is needed.
-3. Read raw files only when the compiled layer is missing detail, provenance, or exact wording.
+3. Read raw files in `memory/raw/` only when the compiled layer is missing detail, provenance, or exact wording.
 4. Synthesize answers from the compiled substrate whenever possible instead of re-deriving everything from raw sources.
 
 **Current limitation:** query outputs are not yet standardized as first-class wiki artifacts. If a query produces durable insight worth preserving, route it into normal memory maintenance deliberately instead of inventing an ad hoc format.
+
+---
 
 ## Lint
 
@@ -278,6 +308,8 @@ Prefer lint:
 - when integrity drift is suspected
 - on a regular weekly maintenance cadence
 
+---
+
 ## Auto-ingest
 
 When the user drops a URL or file path into conversation without an explicit instruction, the agent may automatically trigger intake and ingest.
@@ -286,18 +318,24 @@ Exception: if the source identifier is ambiguous, resolve the ambiguity first in
 
 Do not interpret every dropped URL as a guaranteed persistence request. Default to **intake triage first**; ingest automatically only when the source is clearly worth preserving under the chosen depth.
 
+---
+
 ## Conventions
 
 ### Suggested file layout
 
 ```text
 workspace/
-  raw/                immutable source stubs
-    log.md            append-only ingest/compile log
-    YYYY-MM-DD-<slug>.md
-  project-*.md        compiled project knowledge files
-  YYYY-MM-DD.md       compiled dated notes
-  projects.md         project index
+  memory/
+    raw/              L0 — immutable source stubs
+      log.md          append-only ingest/compile log
+      lint-*.md       lint reports (not raw sources)
+      YYYY-MM-DD-<slug>.md
+    project-*.md      L2 — project knowledge files
+    YYYY-MM-DD.md     L2 — dated notes
+    projects.md       L2 — project index
+  MEMORY.md           L3 — curated durable memory
+  short-term-memory.md L1 — active working/session state
 ```
 
 ### Raw file frontmatter (required)
@@ -314,6 +352,16 @@ compiled_into: []            # inline list of compiled files updated
 tags: []                     # optional topic tags
 ---
 ```
+
+## Examples reference
+
+For concrete anchors, read:
+- `references/examples.md`
+
+Use it when you need a compact example of:
+- direct canonical web ingest
+- YouTube minimal-acquisition-first ingest with transcript preservation
+- not-wiki / action-only rejection
 
 ### Rules
 

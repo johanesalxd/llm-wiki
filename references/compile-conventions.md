@@ -32,7 +32,7 @@ Detailed conventions for integrating raw sources into compiled markdown knowledg
 Every summary section added to a compiled file during a compile operation must include a backlink to the raw source. Use this exact format:
 
 ```
-Source: raw/YYYY-MM-DD-<slug>.md
+Source: memory/raw/YYYY-MM-DD-<slug>.md
 ```
 
 The backlink goes at the end of the summary block, before any cross-references. Example:
@@ -43,7 +43,7 @@ The backlink goes at the end of the summary block, before any cross-references. 
 The authors show that chain-of-thought prompting improves reasoning accuracy
 by 18% on GSM8K when temperature is set to 0.
 
-Source: raw/2026-04-05-smith-chain-of-thought.md
+Source: memory/raw/2026-04-05-smith-chain-of-thought.md
 ```
 
 Do not use full absolute paths in backlinks — relative paths keep the wiki portable.
@@ -68,7 +68,7 @@ Smith et al. find temperature 0 maximises accuracy on reasoning benchmarks.
 
 ⚠️ CONTRADICTION: Earlier guidance recommends temperature 0.7; Smith et al. recommend temperature 0 for reasoning. Review both sources and update the recommendation.
 
-Source: raw/2026-04-05-smith-chain-of-thought.md
+Source: memory/raw/2026-04-05-smith-chain-of-thought.md
 ```
 
 **Resolution:** When a human resolves the contradiction, add a `RESOLVED` note on the next line:
@@ -115,7 +115,7 @@ Cross-references are optional but encouraged for topics that appear in multiple 
 
 ### Before (raw stub, uncompiled)
 
-File: `raw/2026-04-05-smith-chain-of-thought.md`
+File: `memory/raw/2026-04-05-smith-chain-of-thought.md`
 
 ```markdown
 ---
@@ -161,7 +161,7 @@ by including intermediate reasoning steps in few-shot examples.
 
 ⚠️ CONTRADICTION: Previous note suggested temperature 0.7 for reasoning tasks; Smith et al. find temperature 0 maximises accuracy. Review and reconcile.
 
-Source: raw/2026-04-05-smith-chain-of-thought.md
+Source: memory/raw/2026-04-05-smith-chain-of-thought.md
 See also: project-prompt-engineering.md § Few-shot prompting
 ```
 
