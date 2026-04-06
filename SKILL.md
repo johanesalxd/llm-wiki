@@ -1,41 +1,42 @@
 ---
 name: llm-wiki
-description: "LLM Knowledge Base skill — ingest raw sources into memory/raw/, compile them into L2 memory files, and lint the wiki for orphans and contradictions. Use when: adding research articles, PDFs, YouTube videos, X threads, or images to the knowledge base; compiling raw sources into project memory files; or running a wiki health check. NOT for: spa day (that's openclaw context optimization), STM/L1 management, or distill-and-flush."
+description: "LLM Knowledge Base skill — ingest raw sources into a markdown source layer, compile them into project memory files, and lint the wiki for orphans and contradictions. Use when: adding research articles, PDFs, YouTube videos, X threads, or images to a long-lived markdown knowledge base; compiling raw sources into durable project notes; or running a wiki health check. NOT for: generic workspace cleanup, task-only reminders, or one-off context compaction."
 ---
 
 # llm-wiki skill
 
-Implements Karpathy's LLM Knowledge Base pattern for the Vader/OpenClaw workspace. Three core wiki operations: **Ingest**, **Compile**, **Lint**.
+Implements Karpathy's LLM Knowledge Base pattern for an agent-maintained markdown knowledge base. Three core wiki operations: **Ingest**, **Compile**, **Lint**.
 
-In this adaptation, **Vader / OpenClaw** is the runtime layer:
-- **point of ingestion** — Jo drops a URL, file, blob, or external reference into chat
-- **orchestrator** — Vader chooses the right upstream acquisition tool/skill, writes the raw record, compiles it into memory, and runs lint
-- **query engine** — Vader answers against the compiled markdown memory substrate using direct reads, `memory_search`, project files, dated notes, and raw sources
+Reference anchor: Andrej Karpathy, *A pattern for building personal knowledge bases using LLMs* — https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 
-A future Obsidian layer is optional and human-facing only. It is not required for the current architecture.
+In this adaptation, the agent plays three roles:
+- **point of ingestion** — the user provides a URL, file, blob, or external reference
+- **orchestrator** — the agent chooses the right acquisition tool, writes the raw record, compiles it into the wiki, and runs lint when needed
+- **query engine** — the agent answers against the compiled markdown substrate using direct reads, search, project files, dated notes, and raw sources
 
-## Model policy
+A human-facing mirror or reader layer may exist, but it is not the canonical store and is not required for the core architecture.
 
-Standard llm-wiki work is limited to:
-- `gpt54min`
-- `sonnet`
+## Ingestion depth model
 
-Use one of these two by default for ingestion, orchestration, query, compile, and lint review around the wiki. This is a quality guardrail for the persistent memory substrate.
+Use this ladder to choose how much processing a source deserves.
 
-Do not downgrade llm-wiki work to cheaper/weaker models unless Jo explicitly asks.
+- **Depth 0 — Preserve raw only**
+  - Use when the source is worth archiving but not yet worth synthesis.
+- **Depth 1 — Raw + wiki compression**
+  - Default for clean, worthwhile sources.
+  - Preserve immutable raw, then add a concise summary to the compiled layer.
+- **Depth 2 — Quick context pass + ingest**
+  - Use when the source bundle needs light framing or canonical-source selection.
+- **Depth 3 — Light Analysis + promote**
+  - Use when the topic needs structured judgment before persistence.
+- **Depth 4 — Deep Analysis + promote**
+  - Use when the topic is strategic, contested, or high-stakes.
 
-> **Skill taxonomy:** Skills referenced in this file fall into three categories:
-> 1. **Local skills** — in `~/clawd/skills/` (e.g. `llm-wiki` itself)
-> 2. **Bundled OpenClaw skills** — shipped with OpenClaw at `~/.local/share/mise/installs/node/24.13.0/lib/node_modules/openclaw/skills/` (e.g. `summarize`, `blogwatcher`)
-> 3. **Extra/extension skills** — installed separately
->
-> Agents must not assume all skills live in `~/clawd/skills/`. Check all three locations if a skill is not found locally.
-
----
+Default behavior: choose the lowest depth that preserves long-term value without creating junk.
 
 ## Pre-ingest triage
 
-When Jo drops a link, file, blob, task item, or source reference into chat, Vader should decide the right processing depth **before ingesting anything**.
+When the user provides a link, file, blob, task item, or source reference, decide the right processing depth **before ingesting anything**.
 
 This is a **pre-ingest** stage, not compile time.
 
@@ -44,7 +45,7 @@ There are five valid outcomes:
 1. **Direct ingest**
    - Use when the source is already canonical enough to preserve directly.
    - Example: a clean article URL, gist, PDF, repo README, tweet thread, or notebook reference with obvious long-term value.
-   - Path: acquire source -> write raw record -> compile into L2.
+   - Path: acquire source -> write raw record -> compile into the wiki.
 
 2. **Quick context pass first**
    - Use when the source is real but context is incomplete, multiple candidate links exist, or the importance is still being established.
@@ -52,14 +53,12 @@ There are five valid outcomes:
    - Path: quick understanding pass -> choose canonical source(s) -> then ingest what matters.
 
 3. **Formal Light Analysis protocol first**
-   - Use when the source/topic warrants the named workspace Light Analysis mode.
-   - Governed by: `~/clawd/skills/deep-analysis/SKILL.md`
+   - Use when the source/topic warrants a named Light Analysis mode in the current workspace.
    - Path: run the formal Light Analysis protocol first -> then decide which source(s) or conclusions should be ingested.
 
 4. **Formal Deep Analysis protocol first**
    - Use when the topic is strategically important, ambiguous, contested, or valuable enough that a full structured analysis should come before persistence.
-   - Governed by: `~/clawd/skills/deep-analysis/SKILL.md`
-   - Path: run the formal Deep Analysis protocol first -> then promote key sources or durable synthesis into llm-wiki.
+   - Path: run the formal Deep Analysis protocol first -> then promote key sources or durable synthesis into the wiki.
 
 5. **Not wiki / action-only**
    - Use when the input is really a task, reminder, or execution request rather than knowledge worth preserving.
@@ -67,16 +66,15 @@ There are five valid outcomes:
 
 ### Pre-ingest triage rule
 
-Vader has autonomy to choose the processing strategy. Dropping a source into chat does **not** imply blind ingest.
+The agent has autonomy to choose the processing strategy. Dropping a source into chat does **not** imply blind ingest.
 
 The governing rule is:
 - if the source is already good enough -> ingest it
 - if the source needs just a little more context -> do a quick context pass first
-- if the source/topic warrants the formal Light Analysis protocol -> use `~/clawd/skills/deep-analysis/SKILL.md`
-- if the source/topic warrants the formal Deep Analysis protocol -> use `~/clawd/skills/deep-analysis/SKILL.md`
+- if the source/topic warrants a formal analysis protocol -> use that first
 - if it is just an action item -> do not force it into the wiki
 
-Formal Light/Deep Analysis may arise not only from dropped links/files but also from the live conversation itself.
+Formal analysis may arise not only from dropped links/files but also from the live conversation itself.
 
 ## Ingest
 
@@ -86,8 +84,8 @@ Add a new source to the knowledge base.
 
 Do not confuse **acquisition** with **ingest**.
 
-- **Acquisition** = use the right upstream tool/skill to extract the source content
-- **Ingest** = write the resulting source record into `~/clawd/memory/raw/`
+- **Acquisition** = use the right upstream tool or skill to extract the source content
+- **Ingest** = write the resulting source record into the raw layer
 
 The tools in the routing table below are acquisition tools. The wiki protocol begins once the source is captured into the raw layer.
 
@@ -95,23 +93,24 @@ The tools in the routing table below are acquisition tools. The wiki protocol be
 
 | Source | Detection | Tool |
 |---|---|---|
-| Web URL (article/blog/doc) | starts with `http`/`https` | `web_fetch` → save as .md |
-| PDF | `.pdf` extension or URL | `gemini-pdf-analyzer` skill |
-| Image / screenshot | `.png`/`.jpg`/`.webp` | `vision-sandbox` skill |
-| YouTube URL | `youtube.com` or `youtu.be` | `summarize` skill |
-| X/Twitter thread | `x.com` or `twitter.com` | `bird thread <url>` |
-| NotebookLM notebook | nlm notebook name | `notebooklm` skill |
+| Web URL (article/blog/doc) | starts with `http`/`https` | `web_fetch` |
+| PDF | `.pdf` extension or URL | PDF analysis tool or skill |
+| Image / screenshot | `.png`/`.jpg`/`.webp` | vision or image-analysis tool |
+| YouTube URL | `youtube.com` or `youtu.be` | summarization/transcript tool |
+| X/Twitter thread | `x.com` or `twitter.com` | thread extraction tool |
+| NotebookLM notebook | notebook name or share link | NotebookLM tool or adapter |
 
 ### Ingest procedure
 
-1. Detect source type from the URL pattern or file extension (see table above; for edge cases see `references/source-routing.md`).
-2. Call the appropriate tool to fetch/summarize/extract the source content.
-3. Derive a slug from the source title: kebab-case, max 6 words. For YouTube `watch?v=` URLs, always ask Jo for a meaningful slug — auto-derived slug will be useless.
-4. Write the stub file directly using the `write` tool:
+1. Detect source type from the URL pattern or file extension (see `references/source-routing.md` for edge cases).
+2. Call the appropriate tool to fetch, summarize, or extract the source content.
+3. For YouTube sources, do a minimal acquisition pass first so the agent can identify the video properly before naming it. Do not preserve raw YouTube IDs or guess from the URL alone.
+4. Derive a slug from the confirmed source title: kebab-case, max 6 words. For YouTube `watch?v=` or `youtu.be` URLs, do not auto-derive from the URL token; use the confirmed title/topic after the minimal acquisition pass, and ask the user only if the title still leaves the slug ambiguous.
+5. Write the stub file directly into the raw layer using this filename shape:
    ```
-   ~/clawd/memory/raw/YYYY-MM-DD-<slug>.md
+   raw/YYYY-MM-DD-<slug>.md
    ```
-   Use today's date. The file must include this frontmatter at the top, followed by the fetched content body:
+   The file should include frontmatter like:
    ```yaml
    ---
    title: <source title>
@@ -123,166 +122,182 @@ The tools in the routing table below are acquisition tools. The wiki protocol be
    tags: []
    ---
    ```
-5. Append an entry to `~/clawd/memory/raw/log.md` using the `edit` tool (create with header if not exists):
+6. Append an entry to the raw-layer log in this format:
    ```
    ## [YYYY-MM-DD] ingest | <source-title> | <source-type> | <slug>
    ```
-   `log.md` is append-only — never edit existing entries.
+   The log is append-only — never edit existing entries.
 
 ### Ingest gotchas
 
-- **NLM / NotebookLM sources:** Cannot auto-detect from a URL or name. Always pass `--type nlm` explicitly, and use `notebooklm` skill (not `nlm`). See `references/source-routing.md` for details.
-- **YouTube URLs:** Standard `watch?v=` URLs produce a useless slug. Always confirm a meaningful slug with Jo before ingesting.
+- **NotebookLM sources:** They are often ambiguous from the initial input alone. Confirm the notebook identifier or share link if needed.
+- **YouTube URLs:** Standard `watch?v=` or `youtu.be` URLs produce a useless slug. Default behavior is: minimal acquisition pass first -> confirm what the video actually is -> choose a meaningful slug -> write raw. Ask the user only if the title/topic still leaves the slug ambiguous.
 
----
+## YouTube intake protocol
+
+Use this for `youtube.com` or `youtu.be` sources.
+
+1. Run a **minimal acquisition pass first** to obtain transcript, captions, or a stable description.
+2. Confirm what the video actually is before naming it.
+3. Choose a meaningful slug from the confirmed title/topic.
+4. Write the immutable raw record in the raw layer.
+5. Decide compile depth and compile destination after the source is identified.
+6. Ask the user only if title/topic ambiguity still remains after minimal acquisition.
+
+Rule: **raw-first, but not blind**. Do not preserve bare YouTube IDs as if they were meaningful knowledge artifacts.
 
 ## Compile
 
-Integrate a raw source into L2 memory files.
+Integrate a raw source into the compiled wiki layer.
 
 ### Compile procedure
 
-1. Read the target raw file at `~/clawd/memory/raw/YYYY-MM-DD-<slug>.md` using the `read` tool.
+1. Read the target raw file in full.
 2. Check its frontmatter: `compiled` status, `tags`, `source_type`.
-3. Identify which L2 files are relevant:
-   - Read `~/clawd/memory/projects.md` index for active projects.
-   - Scan `~/clawd/memory/project-*.md` files for topically related sections.
-   - If no project file matches, use a dated note: `~/clawd/memory/YYYY-MM-DD.md`.
+3. Identify which compiled files are relevant:
+   - read the project index
+   - scan existing project files for topically related sections
+   - if no project file matches, use a dated note
 4. Route using judgment, not rigid user micromanagement:
-   - update an existing `project-*.md` when the source clearly extends an active topic
-   - create a new `project-*.md` when the topic is distinct and likely to attract multiple future sources
+   - update an existing project file when the source clearly extends an active topic
+   - create a new project file when the topic is distinct and likely to attract multiple future sources
    - use a dated note when the source is one-off, low-priority, or not yet clearly durable
-5. For each relevant L2 file, add a summary section using the `edit` tool:
-   - Write a concise summary of the source's key insights.
-   - Add a backlink: `Source: memory/raw/YYYY-MM-DD-<slug>.md`
-   - Note any contradiction with existing content using the flag:
+
+### Compile destination rule
+
+Choose the compile destination based on **workspace significance**, not just topic.
+
+Ask:
+- Why does this source matter in the current workspace?
+- Is it extending domain knowledge, validating a workflow, recording an implementation lesson, or supporting an active project?
+
+Example:
+- a video may be about LLMs in general
+- but if it primarily validates the wiki's YouTube ingest workflow, the right destination can still be the project file for the wiki itself
+
+5. For each relevant compiled file, add a summary section:
+   - Prefer this summary shape when possible:
+     - **What it is**
+     - **Why it matters here**
+     - **Key takeaways**
+     - **Routing / usage implication** (for operational sources)
+   - Add a backlink: `Source: raw/YYYY-MM-DD-<slug>.md`
+   - Note any contradiction with the flag:
      ```
      ⚠️ CONTRADICTION: <description of the contradiction>
      ```
-   - Add cross-references to related sections where relevant.
-6. Update the raw doc's frontmatter using the `edit` tool:
+   - Add cross-references where relevant.
+6. Update the raw doc's frontmatter:
    ```yaml
    compiled: true
    compiled_date: YYYY-MM-DD
-   compiled_into: ["memory/project-foo.md", "memory/project-bar.md"]
+   compiled_into: ["project-foo.md", "project-bar.md"]
    ```
-   Always use inline list format for `compiled_into` — multi-line YAML block lists are not supported by the lint parser.
-7. Update `~/clawd/memory/projects.md` to reflect any new projects or updated project files created during compile.
-8. Append a compile entry to `~/clawd/memory/raw/log.md`:
+7. Update the project index if new compiled files were created.
+8. Append a compile entry to the raw-layer log:
    ```
-   ## [YYYY-MM-DD] compile | <slug> | files updated: memory/project-foo.md, memory/project-bar.md
+   ## [YYYY-MM-DD] compile | <slug> | files updated: project-foo.md, project-bar.md
    ```
 
-For detailed conventions on L2 integration (when to create new files, how to handle multi-topic sources, backlink format), see `references/compile-conventions.md`.
+For detailed conventions on integration, see `references/compile-conventions.md`.
 
 ### Post-lint routing and refactoring
 
-llm-wiki lint is allowed to surface structural drift such as:
+Lint may surface structural drift such as:
 - mixed-topic project files
-- sections that likely belong in a different `project-*.md`
+- sections that likely belong in a different project file
 - durable subsections that deserve promotion into their own project file
 - dated notes that should be promoted into project memory
 
-When lint surfaces this signal, Vader should treat refactoring as part of the llm-wiki maintenance workflow:
+When lint surfaces this signal, treat refactoring as part of the wiki maintenance workflow:
 - re-home sections when the topical fit is clear
 - split an overloaded project file when a distinct thread has become durable
-- promote a recurring subsection into its own `project-*.md`
-- update `memory/projects.md` accordingly
+- promote a recurring subsection into its own project file
+- update the project index accordingly
 
-This refactoring is judgment-based. Jo should not have to micromanage file placement unless the reorganization is broad or ambiguous.
-
----
+This refactoring is judgment-based.
 
 ## Query
 
 Ask questions against the compiled wiki.
 
-In this adaptation, Vader / OpenClaw is the query engine. Query work is read-heavy and should prefer the compiled memory substrate first:
+The agent is the query runtime. Query work is read-heavy and should prefer the compiled markdown substrate first:
 
-1. Start with the most relevant L2 files (`memory/project-*.md`, dated notes, `memory/projects.md`).
-2. Use `memory_search` when recall across `memory/*.md` is needed.
-3. Read raw files in `memory/raw/` only when the compiled layer is missing detail, provenance, or exact wording.
+1. Start with the most relevant compiled files.
+2. Use search when recall across many markdown files is needed.
+3. Read raw files only when the compiled layer is missing detail, provenance, or exact wording.
 4. Synthesize answers from the compiled substrate whenever possible instead of re-deriving everything from raw sources.
 
-**Current limitation:** query outputs are not yet standardized as first-class wiki artifacts. If a query produces durable insight worth preserving, Vader should route it into normal memory maintenance deliberately instead of inventing an ad hoc format.
-
----
+**Current limitation:** query outputs are not yet standardized as first-class wiki artifacts. If a query produces durable insight worth preserving, route it into normal memory maintenance deliberately instead of inventing an ad hoc format.
 
 ## Lint
 
 Wiki health check. Reports problems — never auto-fixes.
 
-This is distinct from OpenClaw maintenance work such as Spa Day.
-
-- **llm-wiki lint** = research/wiki integrity
-- **Spa Day / context optimization** = OpenClaw instruction, memory-surface, and system hygiene
+This is distinct from generic workspace cleanup.
 
 ### Lint checks
 
 **1. Orphan scan**
-List all `~/clawd/memory/raw/*.md` where `compiled: false`. These are uncompiled sources waiting for integration.
+List all raw-layer files where `compiled: false`. These are uncompiled sources waiting for integration.
 
 **2. Stale scan**
 List raw docs where `compiled_date` is more than 30 days ago. These may need re-review if the topic has evolved.
 
 **3. Contradiction scan**
-Search all `~/clawd/memory/*.md` L2 files for `⚠️ CONTRADICTION:` strings that have not been followed by a resolution note. These require human judgment.
+Search compiled files for `⚠️ CONTRADICTION:` strings that have not been followed by a resolution note. These require human judgment.
 
-**4. Orphan L2 scan**
-Find sections in `~/clawd/memory/project-*.md` that have no `Source: memory/raw/` backlink. Knowledge asserted without a cited source.
+**4. Orphan compiled-section scan**
+Find compiled sections that have no `Source: raw/...` backlink.
 
 **5. Log integrity scan**
-Verify that each `log.md` entry's slug has a corresponding raw file on disk. Warns for orphaned log entries (entry exists, file does not).
+Verify that each log entry's slug has a corresponding raw file on disk.
 
 **6. Post-compile backlink check**
-For each raw file with `compiled: true`, verify that at least one `memory/*.md` L2 file contains the expected `Source: memory/raw/<file>` backlink. Flags compiled files with no backlinks as potential orphans post-compile.
+For each raw file with `compiled: true`, verify that at least one compiled file contains the expected backlink.
 
 ### Running lint
 
 ```sh
 # Print report to terminal
-python3 /Users/johanesalxd/Developer/git/llm-wiki/scripts/lint.py
+python3 scripts/lint.py
 
 # Save report to file
-python3 /Users/johanesalxd/Developer/git/llm-wiki/scripts/lint.py --output ~/clawd/memory/raw/lint-YYYY-MM-DD.md
+python3 scripts/lint.py --output /tmp/llm-wiki-lint-YYYYMMDD.md
 ```
 
 Lint output is a markdown report. Review it and decide which issues to action — no automatic changes are made.
 
-### Lint schedule
+### Lint cadence
 
-Run lint weekly to catch drift early. Suggested cron-friendly command:
+Do not run lint after every clean ingest by default.
 
-```sh
-python3 /Users/johanesalxd/Developer/git/llm-wiki/scripts/lint.py --output /tmp/llm-wiki-lint-$(date +%Y%m%d).md
-```
+Prefer lint:
+- after a batch of ingests
+- after structural refactors or file re-homing
+- when integrity drift is suspected
+- on a regular weekly maintenance cadence
 
----
+## Auto-ingest
 
-## Auto-ingest (Vader-triggered)
+When the user drops a URL or file path into conversation without an explicit instruction, the agent may automatically trigger intake and ingest.
 
-When Jo drops a URL or file path into conversation without an explicit instruction, Vader should automatically trigger ingest without being asked. Follow the Ingest procedure above using native `write`/`edit` tools directly.
+Exception: if the source identifier is ambiguous, resolve the ambiguity first instead of guessing.
 
-**Exception:** If the URL appears to be a NotebookLM link or Jo mentions it is an NLM source, prompt for the notebook name/type before ingesting.
-
----
+Do not interpret every dropped URL as a guaranteed persistence request. Default to **intake triage first**; ingest automatically only when the source is clearly worth preserving under the chosen depth.
 
 ## Conventions
 
-### File layout
+### Suggested file layout
 
-```
-~/clawd/
-  memory/
-    raw/              L0 — immutable source stubs (LLM reads only)
-      log.md          append-only ingest/compile log
-      lint-*.md       lint reports (not raw sources)
-      YYYY-MM-DD-<slug>.md
-    project-*.md      L2 — project knowledge files
-    YYYY-MM-DD.md     L2 — dated notes
-    projects.md       L2 — project index
-    MEMORY.md         L3 — curated durables, auto-injected
-  short-term-memory.md  L1 — active working state
+```text
+workspace/
+  raw/                immutable source stubs
+    log.md            append-only ingest/compile log
+    YYYY-MM-DD-<slug>.md
+  project-*.md        compiled project knowledge files
+  YYYY-MM-DD.md       compiled dated notes
+  projects.md         project index
 ```
 
 ### Raw file frontmatter (required)
@@ -295,7 +310,7 @@ source_type: web|pdf|image|youtube|twitter|nlm
 date_ingested: YYYY-MM-DD
 compiled: true|false
 compiled_date: YYYY-MM-DD   # omit if not yet compiled
-compiled_into: []            # inline list of memory files updated — e.g. ["memory/project-foo.md"]
+compiled_into: []            # inline list of compiled files updated
 tags: []                     # optional topic tags
 ---
 ```
@@ -303,8 +318,8 @@ tags: []                     # optional topic tags
 ### Rules
 
 - Filename format: `YYYY-MM-DD-<kebab-slug>.md` (max 6 words in slug).
-- `memory/raw/log.md` is **append-only** — never edit existing entries.
-- Compile step is always **manual/agent-triggered** — never automatic.
-- Lint reports — always **report only**, human decides on fixes.
-- Contradiction flags (`⚠️ CONTRADICTION:`) must remain until explicitly resolved by a human.
-- `compiled_into` field must use **inline list format** — multi-line YAML block lists are not supported by the lint parser.
+- The raw-layer log is **append-only** — never edit existing entries.
+- Compile is always **manual or agent-triggered** — never automatic by default.
+- Lint is always **report only** — a human decides on fixes.
+- Contradiction flags (`⚠️ CONTRADICTION:`) must remain until explicitly resolved.
+- `compiled_into` must use **inline list format** — multi-line YAML block lists are not supported by the current lint/parser flow.
