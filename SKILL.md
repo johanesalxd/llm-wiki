@@ -62,6 +62,18 @@ In policy-aware deployments, this is especially important for:
 
 If you are about to lint, re-ingest canonical sources, or decide whether an apparent duplicate is actually a problem, read the lint policy first.
 
+## Production execution checklist
+
+For normal day-to-day operation, keep the execution order simple:
+1. read the active lint policy first when the work touches an existing corpus
+2. confirm the intended compile destination before writing anything
+3. acquire the source text first, then preserve raw
+4. for serious long-form YouTube, use the main raw file + `-transcript` companion pattern by default
+5. compile into the correct L2 file
+6. update raw frontmatter bookkeeping (`compiled`, `compiled_date`, `compiled_into`)
+7. append ingest / compile entries to `memory/raw/log.md`
+8. run lint when appropriate (batch, refactor, or integrity check) — not as a ritual after every single ingest
+
 ---
 
 ## Ingestion depth model
