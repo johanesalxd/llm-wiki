@@ -131,7 +131,7 @@ def load_policy(policy_file: Path) -> dict:
         "policy_file": str(policy_file),
         "enforce_after": None,
         "legacy_files": set(),
-        "compile_event_suffixes": ["-second-pass"],
+        "compile_event_suffixes": [],
     }
     if not policy_file.exists():
         return default_policy
@@ -151,7 +151,7 @@ def load_policy(policy_file: Path) -> dict:
         "policy_file": str(policy_file),
         "enforce_after": parse_iso_date(fm.get("enforce_after", "")),
         "legacy_files": set(legacy_files),
-        "compile_event_suffixes": suffixes or default_policy["compile_event_suffixes"],
+        "compile_event_suffixes": suffixes,
     }
 
 
@@ -344,7 +344,7 @@ def check_log_integrity(
 ) -> list[dict]:
     """Warn for post-cutoff log entries whose referenced raw source has no file on disk."""
     results = []
-    compile_event_suffixes = compile_event_suffixes or ["-second-pass"]
+    compile_event_suffixes = compile_event_suffixes or []
     log_path = raw_dir / "log.md"
     if not log_path.exists():
         return results
