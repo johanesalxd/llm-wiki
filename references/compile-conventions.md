@@ -99,6 +99,19 @@ Do not add a single monolithic dump to one file and skip the others — this cre
 
 ---
 
+## Transcript-driven compile rule
+
+When compiling from a YouTube source that has a transcript or transcript-companion file, the **raw transcript is canonical**.
+
+This means:
+- helper summaries are allowed as compression aids on long transcripts
+- chapter maps and source descriptions are allowed as supporting context
+- the final compiled note must still be grounded in the raw transcript, not only the helper summary
+
+If a source was first compiled shallowly for workflow validation and later recompiled from the repaired transcript, record that explicitly as a **second-pass compile** in both the compiled note and the raw log.
+
+---
+
 ## Cross-references
 
 After adding a summary to a compiled file, add cross-references to related sections within the same or other compiled files where the connection is meaningful:

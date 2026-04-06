@@ -174,6 +174,22 @@ Use this for `youtube.com` or `youtu.be` sources.
 
 Rule: **raw-first, but not blind**. Do not preserve bare YouTube IDs as if they were meaningful knowledge artifacts. For serious long-form videos, transcript-first preservation is the default.
 
+### Transcript-driven compile rule
+
+When a YouTube source has a transcript or transcript-companion file, treat the **raw transcript as the canonical source of truth** for compile.
+
+Allowed:
+- use summarization tools as a **compression aid** on long transcripts
+- use chapter maps and source descriptions as supporting context
+
+Not allowed:
+- let a helper summary replace the raw transcript as the basis for compile
+- write L2 as if the transcript was reviewed when only the helper summary was reviewed
+
+Quality rule:
+- the final L2 write must remain grounded in the raw transcript, even if a summarization tool was used to speed up the first pass
+- if the first compile was intentionally shallow for workflow validation, a later transcript-driven compile should be logged explicitly as a second-pass correction
+
 ## Compile
 
 Integrate a raw source into L2 memory files.
