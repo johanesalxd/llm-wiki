@@ -1,10 +1,10 @@
 # llm-wiki
 
-An OpenClaw skill that adapts Karpathy's LLM Knowledge Base pattern to the Vader/OpenClaw workspace.
+An agent skill that adapts Karpathy's LLM Knowledge Base pattern to a markdown-first knowledge base.
 
-This repo is intentionally small. It is **not** a standalone app or a mini framework. It is:
+This repo is intentionally small. It is **not** a standalone app or framework. It is:
 - a workflow/spec for how the knowledge base should operate
-- a deployed `SKILL.md` for OpenClaw
+- a public `SKILL.md` for agent runtimes
 - one useful integrity tool: `scripts/lint.py`
 - reference notes for routing and compile conventions
 
@@ -12,153 +12,141 @@ The goal is simple: make knowledge compound over time instead of re-deriving eve
 
 ---
 
+## Reference
+
+This repo is inspired by:
+- Andrej Karpathy, *A pattern for building personal knowledge bases using LLMs*
+- https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+
+---
+
 ## Architecture
 
-This implementation maps the pattern onto Jo's existing memory stack:
+This implementation assumes a layered markdown knowledge base:
 
 ```text
-L0  ~/clawd/memory/raw/           immutable raw sources
-L1  ~/clawd/short-term-memory.md  active working state
-L2  ~/clawd/memory/*.md           compiled wiki: project files + dated notes
-L3  ~/clawd/MEMORY.md             curated durables, auto-injected
+L0  raw/            immutable raw sources
+L1  working state   optional active/short-term layer
+L2  project notes   compiled wiki: project files + dated notes
+L3  durables        curated long-term notes
 ```
 
-### Runtime roles in this setup
+The exact filenames and surrounding runtime can vary. The important part is the separation of concerns:
+- raw sources stay immutable
+- compiled notes become the main reading/query surface
+- lint checks integrity drift
 
-For this repo, **Vader / OpenClaw** plays three roles:
+### Runtime roles
+
+The agent runtime plays three roles:
 
 1. **Point of ingestion**
-   - Jo drops a URL, uploads a file, asks for a Drive fetch, shares a tweet, etc.
-   - Vader receives the source and decides how to acquire it.
+   - receives links, files, blobs, and source references
+   - decides how to acquire the source
 
 2. **Orchestrator**
-   - Vader chooses the right acquisition tool/skill
-   - writes the raw source record into `memory/raw/`
-   - compiles relevant insights into L1/L2 memory files
+   - chooses the right acquisition tool
+   - writes the raw source record
+   - compiles relevant insights into the wiki
    - runs lint when needed
 
 3. **Query engine**
-   - Vader answers against the compiled memory substrate using direct reads, `memory_search`, raw files, project files, and dated notes.
+   - answers against the compiled markdown substrate using direct reads, search, project files, dated notes, and raw sources
 
-A future **human-consumption frontend** like Obsidian may be added later, but it is **not** required for the current architecture.
+A human-facing mirror or reader layer may be added later, but it is not required for the core architecture.
 
 ### High-level flow
 
 ```mermaid
 flowchart TD
-    A[Jo drops link / file / blob / task / source] --> B[Vader intake triage]
+    A[User provides link / file / blob / source] --> B[Agent intake triage]
 
     B -->|Source is good enough| C[Direct ingest]
     B -->|Needs a little more context| D[Quick context pass first]
-    B -->|Use formal Light Analysis protocol| E[Light Analysis skill first]
-    B -->|Use formal Deep Analysis protocol| F[Deep Analysis skill first]
-    B -->|Action item only| G[Not wiki / action-only]
+    B -->|Needs structured judgment| E[Light or Deep Analysis first]
+    B -->|Action item only| F[Not wiki / action-only]
 
-    E --> H[Follow ~/clawd/skills/deep-analysis/SKILL.md]
-    F --> H
+    C --> G[Acquire source with the right tool]
+    G --> H[Write raw record into raw layer]
+    H --> I[Compile into project notes]
+    I --> J[Run lint when needed]
+    J --> K[Query against compiled wiki]
 
-    C --> I[Acquire source with the right tool]
-    I --> J[Write raw record into memory/raw]
-    J --> K[Compile into L2 memory]
-    K --> L[Run lint when needed]
-    L --> M[Query against compiled wiki]
+    D --> L[Clarify context and choose canonical source]
+    L --> C
 
-    D --> N[Clarify context and choose canonical source(s)]
-    N --> C
+    E --> M[Produce structured analysis]
+    M --> N[Promote durable sources or synthesis into wiki]
+    N --> H
 
-    H --> O[Produce structured analysis]
-    O --> P[Promote durable sources or synthesis into llm-wiki]
-    P --> J
-
-    G --> Q[Execute / track normally]
-
-    M --> R[Optional future file-back of durable query outputs]
+    F --> O[Execute or track normally]
 ```
-
-This diagram is intentionally aligned with `SKILL.md`, which is the source of truth for behavior.
-
-### Model policy
-
-Standard llm-wiki work is limited to:
-- `gpt54min`
-- `sonnet`
-
-Use one of those two by default for ingestion, orchestration, query, compile, and lint review work around the wiki. This is a safety/quality guardrail to keep the memory substrate from drifting under weaker models.
-
-Do not downgrade llm-wiki work to cheaper/weaker models unless Jo explicitly asks.
 
 ---
 
 ## Operating model
 
-There are five distinct concepts in this system:
+There are five distinct concepts in this system.
 
-### Pre-ingest triage
-Before any ingest, Vader decides the right processing depth:
+### 1. Pre-ingest triage
+Before any ingest, the agent decides the right processing depth:
 - **direct ingest** when the source is already canonical enough
 - **quick context pass first** when context is incomplete and the best source still needs to be identified
-- **formal Light Analysis protocol first** when the named Light Analysis mode should be used
-- **formal Deep Analysis protocol first** when the named Deep Analysis mode should be used
+- **formal Light Analysis protocol first** when the topic needs structured judgment
+- **formal Deep Analysis protocol first** when the topic is high-stakes or contested
 - **not wiki / action-only** when the item is really just a task or reminder
-
-Important distinction:
-- **quick context pass** is a lightweight triage/synthesis step and is **not** the formal Light Analysis protocol
-- formal **Light Analysis** / **Deep Analysis** are governed by `~/clawd/skills/deep-analysis/SKILL.md`
 
 Dropping a source into chat does not mean it should be ingested blindly.
 
-### 1. Acquisition
+### 2. Acquisition
 Turn an external source into usable text, images, or extracted content.
 
 Typical upstream tools:
 - `web_fetch` for articles/docs/pages
-- `bird thread <url>` for X / Twitter
-- `gemini-pdf-analyzer` for PDFs
-- `vision-sandbox` for images/screenshots
-- `summarize` for YouTube
-- `notebooklm` for NotebookLM notebooks
+- thread extraction tools for X / Twitter
+- PDF analysis tools for PDFs
+- vision tools for images/screenshots
+- summarization/transcript tools for YouTube
+- notebook adapters for NotebookLM notebooks
 
 These are **acquisition tools**, not the wiki itself.
 
-### 2. Ingest
-Create a raw source record in:
+### 3. Ingest
+Create a raw source record in a raw source layer such as:
 
 ```text
-~/clawd/memory/raw/YYYY-MM-DD-<slug>.md
+raw/YYYY-MM-DD-<slug>.md
 ```
 
 This preserves the source material in a stable, inspectable markdown form.
 
-### 3. Compile
+### 4. Compile
 Integrate the source into the persistent wiki layer:
-- update relevant `memory/project-*.md` files
-- or update a dated note in `memory/YYYY-MM-DD.md`
+- update relevant `project-*.md` files
+- or update a dated note like `YYYY-MM-DD.md`
 - add backlinks to the raw source
 - flag contradictions explicitly
 - update source metadata and the append-only log
 
-### 4. Lint
+### 5. Lint
 Run a read-only integrity audit over the wiki:
 - uncompiled raw sources
 - stale compiled sources
 - unresolved contradiction flags
-- uncited L2 sections
+- uncited compiled sections
 - orphaned log entries
-- compiled files with no L2 backlinks
+- compiled files with no backlinks
 
-This is **not** Spa Day.
+Lint is not generic workspace cleanup. It is wiki integrity work.
 
-- **llm-wiki lint** = research/wiki integrity
-- **Spa Day** = OpenClaw/context/system hygiene
-
-### 5. Query
+### 6. Query
 Ask questions against the compiled memory substrate.
 
-In this adaptation, the query runtime is Vader/OpenClaw itself. The answers are generated from the layered markdown memory system, not from a separate vector product or app.
+The answers should come from the layered markdown knowledge base, not from a separate vector product or app.
 
 ---
 
-## What this repo currently includes
+## What this repo includes
 
 ```text
 llm-wiki/
@@ -170,22 +158,18 @@ llm-wiki/
   references/
     source-routing.md
     compile-conventions.md
-  .opencode/
-    plans/
 ```
 
 ### Included
 - `SKILL.md` — operational protocol for ingest / compile / lint
 - `scripts/lint.py` — read-only wiki integrity checker
 - `references/source-routing.md` — source acquisition routing guidance
-- `references/compile-conventions.md` — how to integrate raw sources into L2
-- `.opencode/plans/` — historical design decisions and build plans
+- `references/compile-conventions.md` — how to integrate raw sources into compiled notes
 
 ### Not included
 - no helper ingest script
 - no helper compile script
-- no Obsidian integration yet
-- no dedicated `index.md` catalog yet
+- no dedicated frontend
 - no standardized query-output filing workflow yet
 
 That is deliberate. The repo is currently a **protocol + linter**, not a full product.
@@ -194,30 +178,25 @@ That is deliberate. The repo is currently a **protocol + linter**, not a full pr
 
 ## Why only `lint.py` remains
 
-Earlier versions included helper scripts for ingest and pre-compile inspection.
-Those were removed because they added friction without adding real capability.
+Earlier iterations can easily accumulate helper scripts for ingest and compile. This repo keeps only the part that is truly worth scripting.
 
-- ingest is better handled directly by Vader/OpenClaw using native tools
+- ingest is usually better handled directly by the agent runtime using native tools
 - compile targeting is judgment-heavy and better handled by the agent directly
 - linting benefits from a script because it scans many files mechanically and consistently
 
-So the current repo keeps only the part that is truly worth scripting.
+So the current repo keeps only the part that is clearly worth automating.
 
 ---
 
 ## Current status
 
 - layer mapping is established
-- skill is deployed to `~/clawd/skills/llm-wiki/SKILL.md`
-- helper scripts were simplified away
+- skill behavior is documented in `SKILL.md`
+- routing and compile conventions live in `references/`
 - `lint.py` remains as the only script
-- first real end-to-end validation is **still pending**
+- the workflow has been validated on canonical web and YouTube source patterns
 
-The next meaningful milestone is:
-1. ingest one real source
-2. compile it into L1/L2
-3. run lint
-4. review backlinks + log integrity
+The next meaningful milestone is continued real-world use across varied source types.
 
 ---
 
@@ -228,34 +207,33 @@ Compared to the original LLM wiki pattern, this repo is strongest on:
 - schema/protocol discipline
 - contradiction tracking
 - append-only history
-- compatibility with an existing memory system
+- compatibility with an existing markdown memory system
 
 It is currently weaker on:
-- a first-class `index.md` content catalog
+- a first-class content catalog/index UI
 - a standardized query-output filing loop
-- a human browsing frontend like Obsidian
+- a human browsing frontend
 
-That is acceptable for now. The current objective is to validate the workflow with real sources before adding more surface area.
+That is acceptable for now. The current objective is to keep the workflow sharp and well-specified before adding more surface area.
 
 ---
 
 ## Quick reference
 
-- Runtime skill entrypoint:
-  - `~/clawd/skills/llm-wiki/SKILL.md`
-- Repo root:
-  - `~/Developer/git/llm-wiki/`
-- Raw source layer:
-  - `~/clawd/memory/raw/`
+- Skill entrypoint:
+  - `SKILL.md`
 - Main integrity tool:
-  - `python3 /Users/johanesalxd/Developer/git/llm-wiki/scripts/lint.py`
+  - `python3 scripts/lint.py`
+- Supporting references:
+  - `references/source-routing.md`
+  - `references/compile-conventions.md`
 
 ---
 
 ## Bottom line
 
-This repo is the operating manual for an LLM-maintained knowledge base inside OpenClaw.
+This repo is the operating manual for an LLM-maintained markdown knowledge base.
 
-Jo curates sources and asks questions.
-Vader acquires, compiles, cross-references, and audits.
-The markdown memory layers become the persistent knowledge substrate.
+Humans curate sources and ask questions.
+The agent acquires, compiles, cross-references, and audits.
+The markdown layers become the persistent knowledge substrate.
