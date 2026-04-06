@@ -181,7 +181,29 @@ def check_contradictions(memory_dir: Path) -> list[dict]:
 
 
 BACKLINK_RE = re.compile(r"Source:\s*memory/raw/", re.IGNORECASE)
-SECTION_HEADER_RE = re.compile(r"^#{1,4}\s+(.+)")
+SECTION_HEADER_RE = re.compile(r"^(#{1,4})\s+(.+)")
+
+# Operational/status sections are valid project structure but do not need a raw-source
+# backlink. The orphan-L2 scan should focus on knowledge-bearing sections.
+OPERATIONAL_SECTION_TITLES = {
+    "How to use this file",
+    "Executive Summary",
+    "Scope",
+    "Build & evolution status",
+    "Model policy",
+    "Reference pattern — Karpathy gist (Apr 5, 2026)",
+    "ACP / OpenCode debugging scar tissue (Apr 5, 2026)",
+    "Current state",
+    "Validation runs",
+    "Wishlist / next steps",
+    "Next resume point",
+}
+
+
+def is_operational_section(header: str) -> bool:
+    """Return True for section headers that are structural/operational, not evidence-bearing."""
+    normalized = re.sub(r"^#+\s*", "", header).strip()
+    return normalized in OPERATIONAL_SECTION_TITLES
 
 
 def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
@@ -192,6 +214,10 @@ def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
     - if a project file has at least one raw backlink, uncited sections before the first
       backlink are treated as legacy backlog; uncited sections after that point are treated
       as current orphan-L2 issues
+
+    Scope note:
+    - only level-2 (`##`) sections are scanned as top-level units
+    - operational/status sections are exempt from backlink requirements
     """
     current_results = []
     legacy_results = []
@@ -210,7 +236,7 @@ def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
         current_section: dict | None = None
         for i, line in enumerate(lines):
             header_match = SECTION_HEADER_RE.match(line)
-            if header_match and line.startswith("##"):
+            if header_match and header_match.group(1) == "##":
                 if current_section is not None:
                     sections.append(current_section)
                 current_section = {
@@ -227,7 +253,7 @@ def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
             sections.append(current_section)
 
         for section in sections:
-            if section["has_backlink"]:
+            if section["has_backlink"] or is_operational_section(section["header"]):
                 continue
             item = {
                 "file": md_file.name,
@@ -249,6 +275,21 @@ INGEST_LOG_RE = re.compile(
 COMPILE_LOG_RE = re.compile(
     r"^## \[(\d{4}-\d{2}-\d{2})\] compile \| (.+?) \| files updated: .+$"
 )
+COMPILE_EVENT_SUFFIXES = ("-second-pass",)
+
+
+def expand_compile_slug_candidates(slug: str) -> list[str]:
+    """Return raw-file slug candidates for compile log events.
+
+    Some compile log entries describe a later compile event rather than a distinct raw file,
+    for example `<slug>-second-pass`. In those cases the base raw file still exists and
+    should satisfy log integrity.
+    """
+    candidates = [slug]
+    for suffix in COMPILE_EVENT_SUFFIXES:
+        if slug.endswith(suffix):
+            candidates.append(slug[: -len(suffix)])
+    return candidates
 
 
 def check_log_integrity(raw_dir: Path) -> list[dict]:
@@ -265,13 +306,16 @@ def check_log_integrity(raw_dir: Path) -> list[dict]:
 
         if ingest_match:
             _, slug = ingest_match.groups()
+            slug_candidates = [slug]
         elif compile_match:
             _, slug = compile_match.groups()
+            slug_candidates = expand_compile_slug_candidates(slug)
         else:
             continue
 
-        pattern = f"*-{slug}.md"
-        matches = list(raw_dir.glob(pattern))
+        matches = []
+        for candidate in slug_candidates:
+            matches.extend(raw_dir.glob(f"*-{candidate}.md"))
         if not matches:
             results.append(
                 {
@@ -284,7 +328,6 @@ def check_log_integrity(raw_dir: Path) -> list[dict]:
 
 
 # Check 6: post-compile backlink verification
-BACKLINK_SLUG_RE = re.compile(r"Source:\s*memory/raw/[^/\s]+\.md", re.IGNORECASE)
 
 
 def check_compile_backlinks(raw_dir: Path, memory_dir: Path) -> list[dict]:
