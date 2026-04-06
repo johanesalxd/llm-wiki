@@ -31,8 +31,10 @@ from pathlib import Path
 # Paths
 # ---------------------------------------------------------------------------
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 MEMORY_RAW_DIR = Path.home() / "clawd" / "memory" / "raw"
 MEMORY_DIR = Path.home() / "clawd" / "memory"
+DEFAULT_POLICY_FILE = REPO_ROOT / "references" / "lint-policy.md"
 
 # ---------------------------------------------------------------------------
 # Frontmatter parsing
@@ -57,19 +59,17 @@ def parse_frontmatter(text: str) -> dict:
     lines = match.group(1).splitlines()
     pending_list_key: str | None = None
     for line in lines:
-        if line.startswith("- ") and pending_list_key is not None:
-            # Continuation of a block list
-            item = line[2:].strip().strip('"').strip("'")
+        stripped = line.lstrip()
+        if stripped.startswith("- ") and pending_list_key is not None:
+            item = stripped[2:].strip().strip('"').strip("'")
             fm[pending_list_key].append(item)
             continue
-        # Not a list item — close any pending block list
         pending_list_key = None
         if ":" in line:
             key, _, value = line.partition(":")
             key = key.strip()
             value = value.strip()
             if value == "":
-                # Start of a potential block list
                 fm[key] = []
                 pending_list_key = key
             else:
@@ -86,12 +86,82 @@ def read_file_safe(path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Policy helpers
+# ---------------------------------------------------------------------------
+
+
+def parse_iso_date(value: str | None) -> date | None:
+    """Parse YYYY-MM-DD into a date, returning None on failure."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def infer_file_date(md_file: Path, fm: dict, preferred_key: str | None = None) -> date | None:
+    """Infer the best date associated with a raw file or frontmatter block."""
+    candidate_keys: list[str] = []
+    if preferred_key:
+        candidate_keys.append(preferred_key)
+    candidate_keys.extend(["compiled_date", "date_ingested"])
+    for key in candidate_keys:
+        parsed = parse_iso_date(fm.get(key, ""))
+        if parsed:
+            return parsed
+    stem_match = re.match(r"^(\d{4}-\d{2}-\d{2})-", md_file.name)
+    if stem_match:
+        return parse_iso_date(stem_match.group(1))
+    return None
+
+
+def in_enforcement_scope(item_date: date | None, enforce_after: date | None) -> bool:
+    """Return True when an item should be enforced under the current policy."""
+    if enforce_after is None:
+        return True
+    if item_date is None:
+        return False
+    return item_date >= enforce_after
+
+
+def load_policy(policy_file: Path) -> dict:
+    """Load lint policy from a markdown file with YAML-style frontmatter."""
+    default_policy = {
+        "policy_file": str(policy_file),
+        "enforce_after": None,
+        "legacy_files": set(),
+        "compile_event_suffixes": ["-second-pass"],
+    }
+    if not policy_file.exists():
+        return default_policy
+
+    text = read_file_safe(policy_file)
+    fm = parse_frontmatter(text)
+
+    legacy_files = fm.get("legacy_files", [])
+    if isinstance(legacy_files, str):
+        legacy_files = [legacy_files]
+
+    suffixes = fm.get("compile_event_suffixes", [])
+    if isinstance(suffixes, str):
+        suffixes = [suffixes]
+
+    return {
+        "policy_file": str(policy_file),
+        "enforce_after": parse_iso_date(fm.get("enforce_after", "")),
+        "legacy_files": set(legacy_files),
+        "compile_event_suffixes": suffixes or default_policy["compile_event_suffixes"],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Lint checks
 # ---------------------------------------------------------------------------
 
 
-def check_orphans(raw_dir: Path) -> list[dict]:
-    """List raw files with compiled: false."""
+def check_orphans(raw_dir: Path, enforce_after: date | None = None) -> list[dict]:
+    """List in-scope raw files with compiled: false."""
     results = []
     if not raw_dir.exists():
         return results
@@ -100,6 +170,8 @@ def check_orphans(raw_dir: Path) -> list[dict]:
             continue
         text = read_file_safe(md_file)
         fm = parse_frontmatter(text)
+        if not in_enforcement_scope(infer_file_date(md_file, fm, preferred_key="date_ingested"), enforce_after):
+            continue
         compiled_val = fm.get("compiled", "").lower()
         if compiled_val == "false":
             results.append(
@@ -114,8 +186,8 @@ def check_orphans(raw_dir: Path) -> list[dict]:
     return results
 
 
-def check_stale(raw_dir: Path, stale_days: int = 30) -> list[dict]:
-    """List raw files compiled more than stale_days ago."""
+def check_stale(raw_dir: Path, stale_days: int = 30, enforce_after: date | None = None) -> list[dict]:
+    """List in-scope raw files compiled more than stale_days ago."""
     results = []
     cutoff = date.today() - timedelta(days=stale_days)
     if not raw_dir.exists():
@@ -127,12 +199,10 @@ def check_stale(raw_dir: Path, stale_days: int = 30) -> list[dict]:
         fm = parse_frontmatter(text)
         if fm.get("compiled", "").lower() != "true":
             continue
-        compiled_date_str = fm.get("compiled_date", "")
-        if not compiled_date_str:
+        compiled_date = infer_file_date(md_file, fm, preferred_key="compiled_date")
+        if not in_enforcement_scope(compiled_date, enforce_after):
             continue
-        try:
-            compiled_date = datetime.strptime(compiled_date_str, "%Y-%m-%d").date()
-        except ValueError:
+        if compiled_date is None:
             continue
         if compiled_date < cutoff:
             results.append(
@@ -140,7 +210,7 @@ def check_stale(raw_dir: Path, stale_days: int = 30) -> list[dict]:
                     "file": md_file.name,
                     "path": str(md_file),
                     "title": fm.get("title", "(no title)"),
-                    "compiled_date": compiled_date_str,
+                    "compiled_date": compiled_date.isoformat(),
                     "days_ago": (date.today() - compiled_date).days,
                     "compiled_into": fm.get("compiled_into", "[]"),
                 }
@@ -149,23 +219,22 @@ def check_stale(raw_dir: Path, stale_days: int = 30) -> list[dict]:
 
 
 CONTRADICTION_RE = re.compile(r"⚠️ CONTRADICTION:", re.IGNORECASE)
-# A "resolved" contradiction has a line containing "RESOLVED" after the flag.
 RESOLVED_RE = re.compile(r"RESOLVED", re.IGNORECASE)
 
 
-def check_contradictions(memory_dir: Path) -> list[dict]:
-    """Scan L2 memory files for unresolved contradiction flags."""
+def check_contradictions(memory_dir: Path, legacy_files: set[str] | None = None) -> list[dict]:
+    """Scan non-legacy L2 memory files for unresolved contradiction flags."""
     results = []
+    legacy_files = legacy_files or set()
     if not memory_dir.exists():
         return results
     for md_file in sorted(memory_dir.glob("*.md")):
-        if md_file.name == "MEMORY.md":
+        if md_file.name == "MEMORY.md" or md_file.name in legacy_files:
             continue
         text = read_file_safe(md_file)
         lines = text.splitlines()
         for i, line in enumerate(lines):
             if CONTRADICTION_RE.search(line):
-                # Check if next few lines contain RESOLVED
                 context_lines = lines[i : i + 5]
                 resolved = any(RESOLVED_RE.search(cl) for cl in context_lines[1:])
                 if not resolved:
@@ -183,33 +252,12 @@ def check_contradictions(memory_dir: Path) -> list[dict]:
 BACKLINK_RE = re.compile(r"Source:\s*memory/raw/", re.IGNORECASE)
 SECTION_HEADER_RE = re.compile(r"^(#{1,4})\s+(.+)")
 
-# Operational/status sections are valid project structure but do not need a raw-source
-# backlink. The orphan-L2 scan should focus on knowledge-bearing sections.
-OPERATIONAL_SECTION_TITLES = {
-    "How to use this file",
-    "Executive Summary",
-    "Scope",
-    "Build & evolution status",
-    "Model policy",
-    "Reference pattern — Karpathy gist (Apr 5, 2026)",
-    "ACP / OpenCode debugging scar tissue (Apr 5, 2026)",
-    "Current state",
-    "Validation runs",
-    "Wishlist / next steps",
-    "Next resume point",
-}
 
-
-def is_operational_section(header: str) -> bool:
-    """Return True for section headers that are structural/operational, not evidence-bearing."""
-    normalized = re.sub(r"^#+\s*", "", header).strip()
-    return normalized in OPERATIONAL_SECTION_TITLES
-
-
-def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
+def check_orphan_l2(memory_dir: Path, legacy_files: set[str] | None = None) -> tuple[list[dict], list[dict]]:
     """Find uncited sections in project files, split into current vs legacy backlog.
 
     Migration-aware policy:
+    - if a file is listed as legacy in lint policy, all uncited sections are legacy
     - if a project file has never had any raw backlink, all uncited sections are legacy
     - if a project file has at least one raw backlink, uncited sections before the first
       backlink are treated as legacy backlog; uncited sections after that point are treated
@@ -217,12 +265,13 @@ def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
 
     Scope note:
     - only level-2 (`##`) sections are scanned as top-level units
-    - operational/status sections are exempt from backlink requirements
     """
     current_results = []
     legacy_results = []
+    legacy_files = legacy_files or set()
     if not memory_dir.exists():
         return current_results, legacy_results
+
     for md_file in sorted(memory_dir.glob("project-*.md")):
         text = read_file_safe(md_file)
         lines = text.splitlines()
@@ -243,17 +292,14 @@ def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
                     "header": line.strip(),
                     "line_number": i + 1,
                     "has_backlink": False,
-                    "lines": [],
                 }
-            elif current_section is not None:
-                current_section["lines"].append(line)
-                if BACKLINK_RE.search(line):
-                    current_section["has_backlink"] = True
+            elif current_section is not None and BACKLINK_RE.search(line):
+                current_section["has_backlink"] = True
         if current_section is not None:
             sections.append(current_section)
 
         for section in sections:
-            if section["has_backlink"] or is_operational_section(section["header"]):
+            if section["has_backlink"]:
                 continue
             item = {
                 "file": md_file.name,
@@ -261,40 +307,44 @@ def check_orphan_l2(memory_dir: Path) -> tuple[list[dict], list[dict]]:
                 "section": section["header"],
                 "line_number": section["line_number"],
             }
-            if first_backlink_line is None or section["line_number"] < first_backlink_line:
+            if (
+                md_file.name in legacy_files
+                or first_backlink_line is None
+                or section["line_number"] < first_backlink_line
+            ):
                 legacy_results.append(item)
             else:
                 current_results.append(item)
     return current_results, legacy_results
 
 
-# Check 5: log.md integrity — orphaned log entries with no raw file on disk
-INGEST_LOG_RE = re.compile(
-    r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| .+ \| .+ \| (.+)$"
-)
+INGEST_LOG_RE = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| .+ \| .+ \| (.+)$")
 COMPILE_LOG_RE = re.compile(
     r"^## \[(\d{4}-\d{2}-\d{2})\] compile \| (.+?) \| files updated: .+$"
 )
-COMPILE_EVENT_SUFFIXES = ("-second-pass",)
 
 
-def expand_compile_slug_candidates(slug: str) -> list[str]:
+def expand_compile_slug_candidates(slug: str, compile_event_suffixes: list[str]) -> list[str]:
     """Return raw-file slug candidates for compile log events.
 
-    Some compile log entries describe a later compile event rather than a distinct raw file,
-    for example `<slug>-second-pass`. In those cases the base raw file still exists and
-    should satisfy log integrity.
+    Compile log entries may describe a later compile event rather than a distinct raw file,
+    for example `<slug>-second-pass`. Policy controls which suffixes are recognized.
     """
     candidates = [slug]
-    for suffix in COMPILE_EVENT_SUFFIXES:
+    for suffix in compile_event_suffixes:
         if slug.endswith(suffix):
             candidates.append(slug[: -len(suffix)])
     return candidates
 
 
-def check_log_integrity(raw_dir: Path) -> list[dict]:
-    """Warn for log entries whose referenced raw source has no file on disk."""
+def check_log_integrity(
+    raw_dir: Path,
+    enforce_after: date | None = None,
+    compile_event_suffixes: list[str] | None = None,
+) -> list[dict]:
+    """Warn for post-cutoff log entries whose referenced raw source has no file on disk."""
     results = []
+    compile_event_suffixes = compile_event_suffixes or ["-second-pass"]
     log_path = raw_dir / "log.md"
     if not log_path.exists():
         return results
@@ -305,11 +355,15 @@ def check_log_integrity(raw_dir: Path) -> list[dict]:
         compile_match = COMPILE_LOG_RE.match(text)
 
         if ingest_match:
-            _, slug = ingest_match.groups()
+            entry_date_str, slug = ingest_match.groups()
+            if not in_enforcement_scope(parse_iso_date(entry_date_str), enforce_after):
+                continue
             slug_candidates = [slug]
         elif compile_match:
-            _, slug = compile_match.groups()
-            slug_candidates = expand_compile_slug_candidates(slug)
+            entry_date_str, slug = compile_match.groups()
+            if not in_enforcement_scope(parse_iso_date(entry_date_str), enforce_after):
+                continue
+            slug_candidates = expand_compile_slug_candidates(slug, compile_event_suffixes)
         else:
             continue
 
@@ -327,16 +381,16 @@ def check_log_integrity(raw_dir: Path) -> list[dict]:
     return results
 
 
-# Check 6: post-compile backlink verification
-
-
-def check_compile_backlinks(raw_dir: Path, memory_dir: Path) -> list[dict]:
-    """For each compiled raw file, verify at least one L2 file has its backlink."""
+def check_compile_backlinks(
+    raw_dir: Path,
+    memory_dir: Path,
+    enforce_after: date | None = None,
+) -> list[dict]:
+    """For each in-scope compiled raw file, verify at least one L2 file has its backlink."""
     results = []
     if not raw_dir.exists():
         return results
 
-    # Load all L2 memory file content once
     l2_texts: list[str] = []
     if memory_dir.exists():
         for md_file in memory_dir.glob("*.md"):
@@ -351,7 +405,8 @@ def check_compile_backlinks(raw_dir: Path, memory_dir: Path) -> list[dict]:
         fm = parse_frontmatter(text)
         if fm.get("compiled", "").lower() != "true":
             continue
-        # Build expected backlink fragment: memory/raw/YYYY-MM-DD-slug.md
+        if not in_enforcement_scope(infer_file_date(md_file, fm, preferred_key="compiled_date"), enforce_after):
+            continue
         expected_backlink = f"memory/raw/{md_file.name}"
         found = any(expected_backlink in l2 for l2 in l2_texts)
         if not found:
@@ -381,6 +436,7 @@ def build_report(
     compile_backlinks: list[dict],
     raw_dir: Path,
     memory_dir: Path,
+    policy: dict,
 ) -> str:
     today = date.today().isoformat()
     lines: list[str] = []
@@ -388,9 +444,16 @@ def build_report(
     lines.append(f"# llm-wiki lint report — {today}")
     lines.append("")
     lines.append(f"Scanned: `{raw_dir}` (raw) | `{memory_dir}` (L2 memory)")
+    lines.append(f"Policy: `{policy['policy_file']}`")
+    if policy["enforce_after"]:
+        lines.append(f"Enforce-after: `{policy['enforce_after'].isoformat()}`")
+    if policy["legacy_files"]:
+        lines.append(
+            "Legacy files: "
+            + ", ".join(f"`{name}`" for name in sorted(policy["legacy_files"]))
+        )
     lines.append("")
 
-    # Summary
     total_issues = (
         len(orphans)
         + len(stale)
@@ -413,7 +476,6 @@ def build_report(
     lines.append(f"| Legacy uncited L2 backlog | {len(legacy_orphan_l2)} |")
     lines.append("")
 
-    # Orphan scan
     lines.append("---")
     lines.append("")
     lines.append(f"## Orphan scan — {len(orphans)} uncompiled raw source(s)")
@@ -431,12 +493,9 @@ def build_report(
         lines.append("_No uncompiled raw sources found._")
     lines.append("")
 
-    # Stale scan
     lines.append("---")
     lines.append("")
-    lines.append(
-        f"## Stale scan — {len(stale)} compiled raw source(s) older than 30 days"
-    )
+    lines.append(f"## Stale scan — {len(stale)} compiled raw source(s) older than 30 days")
     lines.append("")
     if stale:
         lines.append(
@@ -452,7 +511,6 @@ def build_report(
         lines.append("_No stale compiled sources found._")
     lines.append("")
 
-    # Contradiction scan
     lines.append("---")
     lines.append("")
     lines.append(f"## Contradiction scan — {len(contradictions)} unresolved flag(s)")
@@ -463,14 +521,11 @@ def build_report(
         )
         lines.append("")
         for item in contradictions:
-            lines.append(
-                f"- `{item['file']}` line {item['line_number']}: {item['line']}"
-            )
+            lines.append(f"- `{item['file']}` line {item['line_number']}: {item['line']}")
     else:
         lines.append("_No unresolved contradiction flags found._")
     lines.append("")
 
-    # Orphan L2 scan
     lines.append("---")
     lines.append("")
     lines.append(
@@ -483,39 +538,29 @@ def build_report(
         )
         lines.append("")
         for item in orphan_l2:
-            lines.append(
-                f"- `{item['file']}` line {item['line_number']}: {item['section']}"
-            )
+            lines.append(f"- `{item['file']}` line {item['line_number']}: {item['section']}")
     else:
         lines.append("_No current orphan L2 sections found._")
     lines.append("")
 
-    # Legacy orphan L2 backlog
     lines.append("---")
     lines.append("")
-    lines.append(
-        f"## Legacy uncited L2 scan — {len(legacy_orphan_l2)} backlog section(s)"
-    )
+    lines.append(f"## Legacy uncited L2 scan — {len(legacy_orphan_l2)} backlog section(s)")
     lines.append("")
     if legacy_orphan_l2:
         lines.append(
-            "These sections predate llm-wiki backlink discipline or sit earlier in migrated project files. They are migration backlog, not current llm-wiki failures."
+            "These sections are treated as migration backlog under the current lint policy, not as fresh llm-wiki failures."
         )
         lines.append("")
         for item in legacy_orphan_l2:
-            lines.append(
-                f"- `{item['file']}` line {item['line_number']}: {item['section']}"
-            )
+            lines.append(f"- `{item['file']}` line {item['line_number']}: {item['section']}")
     else:
         lines.append("_No legacy uncited L2 backlog found._")
     lines.append("")
 
-    # Check 5: log integrity
     lines.append("---")
     lines.append("")
-    lines.append(
-        f"## Log integrity scan — {len(log_integrity)} orphaned log entry(ies)"
-    )
+    lines.append(f"## Log integrity scan — {len(log_integrity)} orphaned log entry(ies)")
     lines.append("")
     if log_integrity:
         lines.append(
@@ -530,7 +575,6 @@ def build_report(
         lines.append("_No orphaned log entries found._")
     lines.append("")
 
-    # Check 6: post-compile backlink verification
     lines.append("---")
     lines.append("")
     lines.append(
@@ -554,9 +598,7 @@ def build_report(
 
     lines.append("---")
     lines.append("")
-    lines.append(
-        "_Lint report is read-only. No automatic fixes were made. Human decides on actions._"
-    )
+    lines.append("_Lint report is read-only. No automatic fixes were made. Human decides on actions._")
 
     return "\n".join(lines)
 
@@ -593,6 +635,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Save lint report to this file path instead of printing to stdout.",
     )
     parser.add_argument(
+        "--policy-file",
+        default=str(DEFAULT_POLICY_FILE),
+        help=f"Markdown lint policy file with frontmatter (default: {DEFAULT_POLICY_FILE}).",
+    )
+    parser.add_argument(
         "--stale-days",
         type=int,
         default=30,
@@ -606,13 +653,25 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_dir = Path(args.raw_dir)
     memory_dir = Path(args.memory_dir)
+    policy = load_policy(Path(args.policy_file))
+    enforce_after = policy["enforce_after"]
+    legacy_files = policy["legacy_files"]
+    compile_event_suffixes = policy["compile_event_suffixes"]
 
-    orphans = check_orphans(raw_dir)
-    stale = check_stale(raw_dir, stale_days=args.stale_days)
-    contradictions = check_contradictions(memory_dir)
-    orphan_l2, legacy_orphan_l2 = check_orphan_l2(memory_dir)
-    log_integrity = check_log_integrity(raw_dir)
-    compile_backlinks = check_compile_backlinks(raw_dir, memory_dir)
+    orphans = check_orphans(raw_dir, enforce_after=enforce_after)
+    stale = check_stale(raw_dir, stale_days=args.stale_days, enforce_after=enforce_after)
+    contradictions = check_contradictions(memory_dir, legacy_files=legacy_files)
+    orphan_l2, legacy_orphan_l2 = check_orphan_l2(memory_dir, legacy_files=legacy_files)
+    log_integrity = check_log_integrity(
+        raw_dir,
+        enforce_after=enforce_after,
+        compile_event_suffixes=compile_event_suffixes,
+    )
+    compile_backlinks = check_compile_backlinks(
+        raw_dir,
+        memory_dir,
+        enforce_after=enforce_after,
+    )
 
     report = build_report(
         orphans,
@@ -624,6 +683,7 @@ def main(argv: list[str] | None = None) -> int:
         compile_backlinks,
         raw_dir,
         memory_dir,
+        policy,
     )
 
     if args.output:

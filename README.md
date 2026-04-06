@@ -6,7 +6,7 @@ This repo is intentionally small. It is **not** a standalone app or vector datab
 - a workflow/spec for how a long-lived markdown knowledge base should operate
 - a public `SKILL.md` for agent runtimes
 - one useful integrity tool: `scripts/lint.py`
-- a few reference files for routing and compile conventions
+- a few reference files for routing, compile conventions, and lint policy
 
 The goal is simple: **make knowledge compound over time instead of re-deriving everything from raw documents on every query.**
 
@@ -288,6 +288,7 @@ llm-wiki/
   references/
     source-routing.md
     compile-conventions.md
+    lint-policy.md
     examples.md
 ```
 
@@ -296,6 +297,7 @@ llm-wiki/
 - `scripts/lint.py` — read-only wiki integrity checker
 - `references/source-routing.md` — source acquisition routing guidance
 - `references/compile-conventions.md` — how to integrate raw sources into compiled notes
+- `references/lint-policy.md` — visible migration boundary / lint enforcement policy
 - `references/examples.md` — concrete examples for stable behavior
 
 ### Not included
