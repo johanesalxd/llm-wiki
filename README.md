@@ -10,6 +10,8 @@ This repo is intentionally small. It is **not** a standalone app or vector datab
 
 The goal is simple: **make knowledge compound over time instead of re-deriving everything from raw documents on every query.**
 
+> Further OpenClaw background: if you want the broader design context behind this setup, read Jo's OpenClaw guide here — https://github.com/johanesalxd/random-stuff/blob/main/others/openclaw/openclaw-anthropic-guide.md
+
 ---
 
 ## What this system assumes
