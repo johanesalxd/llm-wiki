@@ -396,6 +396,7 @@ llm-wiki/
   references/
     source-routing.md
     compile-conventions.md
+    wiki-writing.md
     lint-policy.md
     examples.md
 ```
@@ -405,6 +406,7 @@ llm-wiki/
 - `scripts/lint.py` — read-only wiki integrity checker
 - `references/source-routing.md` — source acquisition routing guidance
 - `references/compile-conventions.md` — how to integrate raw sources into compiled notes
+- `references/wiki-writing.md` — how compiled L2 pages should read so they function like real wiki articles
 - `references/lint-policy.md` — visible migration boundary / lint enforcement policy
 - `references/examples.md` — concrete examples for stable behavior
 
@@ -441,6 +443,10 @@ So the current repo automates the part that is truly mechanical and leaves the j
 - public `SKILL.md` now mirrors the local/private source of truth much more closely
 - workflow has been validated on canonical web and YouTube source patterns
 - YouTube ingest is now transcript-first when transcript/captions are available
+- wiki-writing guidance now explicitly distinguishes:
+  - source routing
+  - compile placement/merging
+  - article-quality writing for the final L2 surface
 
 The next meaningful step is continued real-world use across varied source types, followed by incremental README / UX refinement.
 
