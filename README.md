@@ -243,20 +243,26 @@ flowchart TD
     B -->|Needs structured judgment| E[Light or Deep Analysis first]
     B -->|Action item only| F[Not wiki / action-only]
 
-    C --> G[Acquire source with the right tool]
-    G --> H[Write raw record into L0]
-    H --> I[Compile into L2 notes]
-    I --> J[Run lint when needed]
-    J --> K[Future query starts from L2]
+    C --> G[Read active lint policy when corpus-touching]
+    G --> H[Confirm intended compile destination]
+    H --> I[Acquire source with the right tool]
+    I --> J{Serious long-form YouTube?}
+    J -->|Yes| K[Write main raw file + transcript companion]
+    J -->|No| L[Write raw record into L0]
+    K --> M[Compile into the correct L2 file]
+    L --> M
+    M --> N[Update raw frontmatter + append log entries]
+    N --> O[Run lint when appropriate]
+    O --> P[Future query starts from L2]
 
-    D --> L[Clarify context and choose canonical source]
-    L --> C
+    D --> Q[Clarify context and choose canonical source]
+    Q --> C
 
-    E --> M[Produce structured analysis]
-    M --> N[Promote durable sources or synthesis]
-    N --> H
+    E --> R[Produce structured analysis]
+    R --> S[Promote durable sources or synthesis]
+    S --> G
 
-    F --> O[Execute or track normally]
+    F --> T[Execute or track normally]
 ```
 
 ### Plain-English version
@@ -268,10 +274,23 @@ flowchart TD
    - light analysis first
    - deep analysis first
    - or not-wiki / action-only
-3. **OpenClaw acquires usable content**
-4. **L0 raw record is written**
-5. **L2 compiled notes are updated**
-6. **Future query starts from the compiled layer**
+3. **If the work touches an existing corpus, read the active lint policy first**
+4. **Confirm the intended compile destination before writing anything**
+5. **OpenClaw acquires usable content**
+6. **L0 raw record is written**
+   - for serious long-form YouTube, this is usually **two raw files**:
+     - main raw source
+     - transcript companion
+7. **L2 compiled notes are updated**
+8. **Raw bookkeeping is updated**
+   - frontmatter: `compiled`, `compiled_date`, `compiled_into`
+   - append-only `memory/raw/log.md`
+9. **Lint runs when appropriate**
+   - batch
+   - refactor
+   - integrity check
+   - not as a ritual after every single ingest
+10. **Future query starts from the compiled layer**
 
 ---
 
@@ -302,7 +321,7 @@ flowchart TD
 
 ## YouTube special case
 
-YouTube is the main place where a two-file raw pattern helps.
+YouTube is the main place where a two-file raw pattern helps, and for **serious long-form videos** it should be treated as the default path.
 
 When transcript/captions are available, preserve **two raw files**:
 
@@ -324,8 +343,11 @@ Why split it?
 - the main file stays readable in Obsidian
 - the transcript remains available for deep query / later recompilation
 - long-form videos stop being “chapter map only” stubs
+- the transcript becomes the canonical compile source instead of a helper summary
 
 In the OpenClaw-shaped layout used here, those files live under `memory/raw/`.
+
+One more operational nuance: if the same canonical video is intentionally re-run under a **new policy boundary**, it is acceptable to create fresh raw/log artifacts on the new date. The thing that must stay clean is the **compile destination**, not artificial deduplication across all time.
 
 ---
 

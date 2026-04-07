@@ -25,7 +25,8 @@ In this adaptation, **OpenClaw** is the runtime layer:
 Operational default:
 - preserve raw first, compile second
 - for YouTube, preserve the **full transcript** when available
-- when the transcript is large, use a main raw source file plus a `-transcript` companion file
+- for serious long-form YouTube sources, default to a main raw source file plus a `-transcript` companion file
+- when the transcript is large or awkward, the `-transcript` companion file is required
 
 **Obsidian** can be used as a human-facing read-only mirror / consumption layer. It is not the canonical store and is not required for the core architecture.
 
@@ -36,6 +37,42 @@ In the reference OpenClaw deployment, standard llm-wiki work is limited to:
 - `sonnet`
 
 Adapt that model policy to your own runtime if needed, but keep the bar high enough that the persistent memory substrate stays coherent.
+
+---
+
+## Policy-aware planning
+
+When wiki work touches an **existing corpus** — especially compile, lint, re-ingest, migration, or archive-split work — read the active lint policy before planning:
+- `references/lint-policy.md`
+
+Treat that policy as the source of truth for:
+- what counts as the **current enforced corpus**
+- which files are intentionally **legacy / migration backlog**
+- which compile-log suffixes are valid follow-on events
+
+Implications:
+- deliberate re-ingestion of the **same source on a new date** may create duplicate-looking raw/log entries; this is acceptable when the new run is a fresh production-era ingest
+- the key thing to keep clean is **routing**, not artificial deduplication
+- when a testing/archive split exists, new production-era compile output must land in the active production file, not the historical archive
+
+In policy-aware deployments, this is especially important for:
+- `enforce_after`
+- `legacy_files`
+- `compile_event_suffixes`
+
+If you are about to lint, re-ingest canonical sources, or decide whether an apparent duplicate is actually a problem, read the lint policy first.
+
+## Production execution checklist
+
+For normal day-to-day operation, keep the execution order simple:
+1. read the active lint policy first when the work touches an existing corpus
+2. confirm the intended compile destination before writing anything
+3. acquire the source text first, then preserve raw
+4. for serious long-form YouTube, use the main raw file + `-transcript` companion pattern by default
+5. compile into the correct L2 file
+6. update raw frontmatter bookkeeping (`compiled`, `compiled_date`, `compiled_into`)
+7. append ingest / compile entries to `memory/raw/log.md`
+8. run lint when appropriate (batch, refactor, or integrity check) — not as a ritual after every single ingest
 
 ---
 
@@ -168,11 +205,11 @@ Use this for `youtube.com` or `youtu.be` sources.
 3. Choose a meaningful slug from the confirmed title/topic.
 4. If transcript/captions are available, preserve the **full transcript** in the raw layer.
 5. Store chapter maps, descriptions, timestamps, and acquisition notes as supporting metadata around the transcript — not as a replacement for it.
-6. If the transcript is too large or awkward for a single raw file, create a companion raw file named `YYYY-MM-DD-<slug>-transcript.md` and reference it from the main raw source file.
+6. For serious long-form videos, create a companion raw file named `YYYY-MM-DD-<slug>-transcript.md` by default and reference it from the main raw source file. If the transcript is too large or awkward for a single raw file, this companion file is required.
 7. Decide compile depth and compile destination after the source is identified.
 8. Ask the user only if title/topic ambiguity still remains after minimal acquisition.
 
-Rule: **raw-first, but not blind**. Do not preserve bare YouTube IDs as if they were meaningful knowledge artifacts. For serious long-form videos, transcript-first preservation is the default.
+Rule: **raw-first, but not blind**. Do not preserve bare YouTube IDs as if they were meaningful knowledge artifacts. For serious long-form videos, transcript-first preservation with the two-file pattern is the default.
 
 ### Transcript-driven compile rule
 
@@ -218,6 +255,12 @@ Ask:
 Example:
 - a video may be about LLMs in general
 - but if it primarily validates the wiki's YouTube ingest workflow, the right destination can still be the project file for the wiki itself
+
+When a source is being **re-run under a new policy boundary**:
+- fresh raw/log artifacts on the new date are acceptable
+- do not treat same-source/same-slug history across different dates as an automatic error
+- use the active lint policy to decide whether the old material is legacy/testing history and where the new compile output belongs
+- if the old destination is an explicitly archived testing file, keep new production-era writes out of that archive
 
 5. For each relevant compiled file, add a summary section:
    - Prefer this summary shape when possible:
