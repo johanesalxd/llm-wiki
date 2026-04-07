@@ -154,7 +154,8 @@ The tools in the routing table below are acquisition tools. The wiki protocol be
 | Source | Detection | Tool |
 |---|---|---|
 | Web URL (article/blog/doc) | starts with `http`/`https` | `web_fetch` |
-| PDF | `.pdf` extension or URL | PDF analysis tool or skill |
+| PDF (large/complex/tables) | `.pdf` >5MB, dense tables, charts, scanned | dedicated PDF analysis skill (e.g. Gemini PDF) |
+| PDF (small/text-heavy) | `.pdf` <5MB, clean prose, simple structure | built-in PDF tool |
 | Image / screenshot | `.png`/`.jpg`/`.webp` | vision or image-analysis tool |
 | YouTube URL | `youtube.com` or `youtu.be` | summarization/transcript tool |
 | X/Twitter thread | `x.com` or `twitter.com` | thread extraction tool |
@@ -262,12 +263,7 @@ When a source is being **re-run under a new policy boundary**:
 - use the active lint policy to decide whether the old material is legacy/testing history and where the new compile output belongs
 - if the old destination is an explicitly archived testing file, keep new production-era writes out of that archive
 
-5. For each relevant compiled file, write or update the content using the article-quality rules in `references/wiki-writing.md`, then add the section:
-   - Prefer this summary shape when possible:
-     - **What it is**
-     - **Why it matters here**
-     - **Key takeaways**
-     - **Routing / usage implication** (for operational sources)
+5. For each relevant compiled file, write or update the content. **Read `references/wiki-writing.md` first** — it governs article quality, section shape, prose density, and anti-pattern avoidance. Choose the section pattern from wiki-writing.md that fits the source type (concept/theory page, source-derived article, or operational/system page) instead of forcing a single template. Then:
    - Add a backlink: `Source: memory/raw/YYYY-MM-DD-<slug>.md`
    - Note any contradiction with the flag:
      ```
