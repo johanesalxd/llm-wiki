@@ -337,7 +337,7 @@ List raw docs where `compiled_date` is more than 30 days ago. These may need re-
 Search compiled files for `⚠️ CONTRADICTION:` strings that have not been followed by a resolution note. These require human judgment.
 
 **4. Orphan compiled-section scan**
-Find compiled sections that have no `Source: raw/...` backlink.
+Find compiled sections that have no `Source: memory/raw/...` backlink.
 
 **5. Log integrity scan**
 Verify that each log entry's slug has a corresponding raw file on disk.
