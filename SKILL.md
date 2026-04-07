@@ -262,7 +262,7 @@ When a source is being **re-run under a new policy boundary**:
 - use the active lint policy to decide whether the old material is legacy/testing history and where the new compile output belongs
 - if the old destination is an explicitly archived testing file, keep new production-era writes out of that archive
 
-5. For each relevant compiled file, add a summary section:
+5. For each relevant compiled file, write or update the content using the article-quality rules in `references/wiki-writing.md`, then add the section:
    - Prefer this summary shape when possible:
      - **What it is**
      - **Why it matters here**
@@ -287,6 +287,7 @@ When a source is being **re-run under a new policy boundary**:
    ```
 
 For detailed conventions on integration, see `references/compile-conventions.md`.
+For article quality, section shape, prose density, and anti-filler guidance, see `references/wiki-writing.md`.
 
 ### Post-lint routing and refactoring
 
