@@ -173,6 +173,28 @@ If the source is important and the compiled result still feels like “highlight
 
 ---
 
+## Concrete anchor rule
+
+When a source uses a specific example, analogy, or demonstration to make an abstract concept click, preserve it in the compiled page.
+
+Abstract explanation alone produces pages that are technically correct but do not generate real understanding. Concrete anchors are the moments where a concept stops being a claim and becomes something the reader can *feel*.
+
+The test: if removing the example makes the concept harder to intuitively grasp — not just harder to verify — keep the example.
+
+Good concrete anchors:
+- a specific surprising result that makes an abstract property visceral (e.g. a model that knows X but not the reverse of X)
+- a vivid demonstration that shows what a failure mode actually looks like in practice (e.g. a model generating plausible-looking but fabricated details)
+- an analogy from the source that reframes the concept in a sticky way
+
+Bad uses of examples:
+- padding with anecdotes that do not deepen understanding
+- repeating the same point through multiple examples when one suffices
+- including examples that only illustrate what the prose already explains clearly
+
+The goal is not to preserve every example from the source. It is to preserve the ones that carry explanatory weight the prose alone cannot.
+
+---
+
 ## Synthesis rule
 
 Do not just repeat the source structure.
