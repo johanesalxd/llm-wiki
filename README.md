@@ -288,7 +288,7 @@ flowchart TD
 7. **L2 compiled notes are updated**
 8. **Raw bookkeeping is updated**
    - frontmatter: `compiled`, `compiled_date`, `compiled_into`
-   - append-only `memory/raw/log.md`
+   - append-only `artifacts/log.md`
 9. **Lint runs when appropriate**
    - batch
    - refactor
