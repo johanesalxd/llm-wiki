@@ -100,7 +100,11 @@ The linter does **not** scan every markdown file equally. It focuses on the raw 
 flowchart TD
     subgraph L0["L0 — raw layer"]
         RAW["memory/raw/*.md\nsource records"]
-        LOG["memory/raw/log.md\nappend-only ingest/compile log"]
+    end
+
+    subgraph OPS["Operational artifacts"]
+        LOG["artifacts/log.md\nappend-only ingest/compile log"]
+        LINTR["artifacts/lint/*.md\nlint reports"]
     end
 
     subgraph L1["L1 — short-term state"]
@@ -128,12 +132,12 @@ flowchart TD
 ```
 
 In practical terms:
-- **Scanned directly:** `memory/raw/*.md`, `memory/raw/log.md`, `memory/project-*.md`, and other `memory/*.md` files used for contradiction/backlink checks
+- **Scanned directly:** `memory/raw/*.md`, `artifacts/log.md`, `memory/project-*.md`, and other `memory/*.md` files used for contradiction/backlink checks
 - **Used as policy, not lint target:** `references/lint-policy.md`
-- **Not scanned as wiki-health targets:** `short-term-memory.md` and `MEMORY.md`
+- **Not scanned as wiki-health targets:** `short-term-memory.md`, `MEMORY.md`, and `artifacts/lint/*.md`
 
 A few important details:
-- `memory/raw/log.md` is checked separately from raw source files
+- `artifacts/log.md` is checked separately from raw source files
 - `memory/project-*.md` is the main target for orphan-L2 detection
 - dated memory files (`memory/YYYY-MM-DD.md`) are not used for orphan-L2, but they are still searched for contradiction flags and raw backlinks
 - `MEMORY.md` is intentionally excluded because it is curated durable memory, not part of the compiled-source backlink discipline
@@ -144,7 +148,7 @@ A new adopter usually has **two policy knobs** to set in `references/lint-policy
 
 | Policy key | Where to change it | What it controls | Typical use |
 |---|---|---|---|
-| `enforce_after` | `references/lint-policy.md` | Date-based enforcement for raw files, raw log entries, and raw-derived checks | "Start strict llm-wiki enforcement from 2026-06-01." |
+| `enforce_after` | `references/lint-policy.md` | Date-based enforcement for raw files, operational log entries, and raw-derived checks | "Start strict llm-wiki enforcement from 2026-06-01." |
 | `legacy_files` | `references/lint-policy.md` | Project files that should be treated as migration backlog instead of current lint debt | "My old `project-research.md` predates wiki discipline; keep it legacy for now." |
 | `compile_event_suffixes` | `references/lint-policy.md` | Valid compile-log suffixes that describe follow-on compile events rather than distinct raw filenames | "We use `-second-pass` for transcript-driven recompiles." |
 
@@ -155,7 +159,7 @@ flowchart TD
     POLICY --> SUFFIX["compile_event_suffixes"]
 
     ENFORCE --> RAW["memory/raw/*.md"]
-    ENFORCE --> LOG["memory/raw/log.md entries"]
+    ENFORCE --> LOG["artifacts/log.md entries"]
     ENFORCE --> RAWCHECKS["stale / orphan / backlink checks derived from raw metadata"]
 
     LEGACY --> PROJ["memory/project-*.md"]
@@ -289,6 +293,7 @@ flowchart TD
    - batch
    - refactor
    - integrity check
+   - output reports under `artifacts/lint/`
    - not as a ritual after every single ingest
 10. **Future query starts from the compiled layer**
 
@@ -399,6 +404,9 @@ llm-wiki/
     wiki-writing.md
     lint-policy.md
     examples.md
+  artifacts/
+    log.md
+    lint/
 ```
 
 ### Included

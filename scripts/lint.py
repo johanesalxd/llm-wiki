@@ -35,6 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MEMORY_RAW_DIR = Path.home() / "clawd" / "memory" / "raw"
 MEMORY_DIR = Path.home() / "clawd" / "memory"
 DEFAULT_POLICY_FILE = REPO_ROOT / "references" / "lint-policy.md"
+DEFAULT_LOG_FILE = REPO_ROOT / "artifacts" / "log.md"
 
 # ---------------------------------------------------------------------------
 # Frontmatter parsing
@@ -339,16 +340,16 @@ def expand_compile_slug_candidates(slug: str, compile_event_suffixes: list[str])
 
 def check_log_integrity(
     raw_dir: Path,
+    log_file: Path,
     enforce_after: date | None = None,
     compile_event_suffixes: list[str] | None = None,
 ) -> list[dict]:
     """Warn for post-cutoff log entries whose referenced raw source has no file on disk."""
     results = []
     compile_event_suffixes = compile_event_suffixes or []
-    log_path = raw_dir / "log.md"
-    if not log_path.exists():
+    if not log_file.exists():
         return results
-    log_text = read_file_safe(log_path)
+    log_text = read_file_safe(log_file)
     for i, line in enumerate(log_text.splitlines(), start=1):
         text = line.strip()
         ingest_match = INGEST_LOG_RE.match(text)
@@ -436,6 +437,7 @@ def build_report(
     compile_backlinks: list[dict],
     raw_dir: Path,
     memory_dir: Path,
+    log_file: Path,
     policy: dict,
 ) -> str:
     today = date.today().isoformat()
@@ -443,7 +445,7 @@ def build_report(
 
     lines.append(f"# llm-wiki lint report — {today}")
     lines.append("")
-    lines.append(f"Scanned: `{raw_dir}` (raw) | `{memory_dir}` (L2 memory)")
+    lines.append(f"Scanned: `{raw_dir}` (raw) | `{memory_dir}` (L2 memory) | `{log_file}` (log)")
     lines.append(f"Policy: `{policy['policy_file']}`")
     if policy["enforce_after"]:
         lines.append(f"Enforce-after: `{policy['enforce_after'].isoformat()}`")
@@ -630,6 +632,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=f"L2 memory directory to scan (default: {MEMORY_DIR}).",
     )
     parser.add_argument(
+        "--log-file",
+        default=str(DEFAULT_LOG_FILE),
+        help=f"append-only ingest/compile log file (default: {DEFAULT_LOG_FILE}).",
+    )
+    parser.add_argument(
         "--output",
         default=None,
         help="Save lint report to this file path instead of printing to stdout.",
@@ -653,6 +660,7 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_dir = Path(args.raw_dir)
     memory_dir = Path(args.memory_dir)
+    log_file = Path(args.log_file)
     policy = load_policy(Path(args.policy_file))
     enforce_after = policy["enforce_after"]
     legacy_files = policy["legacy_files"]
@@ -664,6 +672,7 @@ def main(argv: list[str] | None = None) -> int:
     orphan_l2, legacy_orphan_l2 = check_orphan_l2(memory_dir, legacy_files=legacy_files)
     log_integrity = check_log_integrity(
         raw_dir,
+        log_file,
         enforce_after=enforce_after,
         compile_event_suffixes=compile_event_suffixes,
     )
@@ -683,6 +692,7 @@ def main(argv: list[str] | None = None) -> int:
         compile_backlinks,
         raw_dir,
         memory_dir,
+        log_file,
         policy,
     )
 

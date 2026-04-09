@@ -108,7 +108,7 @@ This means:
 - chapter maps and source descriptions are allowed as supporting context
 - the final compiled note must still be grounded in the raw transcript, not only the helper summary
 
-If a source was first compiled shallowly for workflow validation and later recompiled from the repaired transcript, record that explicitly as a **second-pass compile** in both the compiled note and the raw log.
+If a source was first compiled shallowly for workflow validation and later recompiled from the repaired transcript, record that explicitly as a **second-pass compile** in both the compiled note and the operational log.
 
 ---
 
@@ -193,7 +193,7 @@ tags: ["chain-of-thought", "reasoning", "prompting"]
 ---
 ```
 
-### After (log entry appended)
+### After (log entry appended to `artifacts/log.md`)
 
 ```
 ## [2026-04-05] compile | smith-chain-of-thought | files updated: project-llm-reasoning.md, project-prompt-engineering.md
@@ -212,5 +212,5 @@ Before finishing a compile:
 - [ ] Cross-references added where relevant.
 - [ ] Raw file frontmatter updated: `compiled: true`, `compiled_date`, `compiled_into`.
 - [ ] Project index updated if a new project file was created or an existing one materially changed.
-- [ ] Compile entry appended to the raw log.
+- [ ] Compile entry appended to the operational log.
 - [ ] Log entry is append-only.
