@@ -71,8 +71,8 @@ For normal day-to-day operation, keep the execution order simple:
 4. for serious long-form YouTube, use the main raw file + `-transcript` companion pattern by default
 5. compile into the correct L2 file
 6. update raw frontmatter bookkeeping (`compiled`, `compiled_date`, `compiled_into`)
-7. append ingest / compile entries to `memory/raw/log.md`
-8. run lint when appropriate (batch, refactor, or integrity check) — not as a ritual after every single ingest
+7. append ingest / compile entries to `artifacts/log.md`
+8. run lint when appropriate (batch, refactor, or integrity check) — write reports under `artifacts/lint/`, not the indexed memory tree
 
 ---
 
@@ -184,11 +184,11 @@ The tools in the routing table below are acquisition tools. The wiki protocol be
    tags: []
    ---
    ```
-7. Append an entry to the raw-layer log (create with header if not exists):
+7. Append an entry to the operational log at `artifacts/log.md` (create with header if not exists):
    ```
    ## [YYYY-MM-DD] ingest | <source-title> | <source-type> | <slug>
    ```
-   The log in `memory/raw/log.md` is append-only — never edit existing entries.
+   The log in `artifacts/log.md` is append-only — never edit existing entries.
 
 ### Ingest gotchas
 
@@ -277,7 +277,7 @@ When a source is being **re-run under a new policy boundary**:
    compiled_into: ["project-foo.md", "project-bar.md"]
    ```
 7. Update the project index if new compiled files were created.
-8. Append a compile entry to the raw-layer log:
+8. Append a compile entry to the operational log:
    ```
    ## [YYYY-MM-DD] compile | <slug> | files updated: project-foo.md, project-bar.md
    ```
@@ -349,7 +349,7 @@ For each raw file with `compiled: true`, verify that at least one compiled file 
 python3 scripts/lint.py
 
 # Save report to file
-python3 scripts/lint.py --output /tmp/llm-wiki-lint-YYYYMMDD.md
+python3 scripts/lint.py --output artifacts/lint/lint-YYYY-MM-DD.md
 ```
 
 Lint output is a markdown report. Review it and decide which issues to action — no automatic changes are made.
@@ -384,12 +384,14 @@ Do not interpret every dropped URL as a guaranteed persistence request. Default 
 workspace/
   memory/
     raw/              L0 — immutable source stubs
-      log.md          append-only ingest/compile log
-      lint-*.md       lint reports (not raw sources)
       YYYY-MM-DD-<slug>.md
     project-*.md      L2 — project knowledge files
     YYYY-MM-DD.md     L2 — dated notes
     projects.md       L2 — project index
+  artifacts/
+    log.md            append-only ingest/compile log
+    lint/
+      lint-YYYY-MM-DD.md
   MEMORY.md           L3 — curated durable memory
   short-term-memory.md L1 — active working/session state
 ```
