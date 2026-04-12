@@ -1,7 +1,6 @@
 ---
 enforce_after: 2026-04-07
-legacy_files:
-  - project-llm-wiki-testing.md
+legacy_files: []
 compile_event_suffixes:
   - -second-pass
 ---
